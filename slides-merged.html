@@ -1,0 +1,2268 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM 自動化代碼修改技術 — 完整研究報告</title>
+<style>
+:root {
+  --navy: #1a365d;
+  --blue: #2b6cb0;
+  --light-blue: #bee3f8;
+  --accent: #ed8936;
+  --green: #38a169;
+  --red: #e53e3e;
+  --yellow: #d69e2e;
+  --gray: #718096;
+  --light-gray: #edf2f7;
+  --white: #ffffff;
+  --text: #2d3748;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif; background: #0d1b2a; }
+
+.slide {
+  width: 100vw; height: 100vh;
+  display: none; flex-direction: column;
+  justify-content: center; padding: 60px 80px;
+  background: var(--white); color: var(--text);
+  position: relative; overflow: hidden;
+}
+.slide.active { display: flex; }
+
+.slide.cover { background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 50%, #3182ce 100%); color: white; align-items: center; text-align: center; }
+.slide.section-title { background: linear-gradient(135deg, #1a365d, #2b6cb0); color: white; align-items: center; text-align: center; }
+.slide.dark { background: var(--navy); color: white; }
+
+h1 { font-size: 2.8em; font-weight: 700; margin-bottom: 20px; line-height: 1.2; }
+h2 { font-size: 2.2em; font-weight: 700; color: var(--navy); margin-bottom: 24px; line-height: 1.3; }
+h3 { font-size: 1.5em; font-weight: 600; color: var(--blue); margin-bottom: 16px; }
+p, li { font-size: 1.15em; line-height: 1.7; }
+.subtitle { font-size: 1.4em; opacity: 0.9; margin-bottom: 30px; }
+.small { font-size: 0.95em; color: var(--gray); }
+
+ul { list-style: none; padding-left: 0; }
+ul li { padding: 6px 0; padding-left: 28px; position: relative; }
+ul li::before { content: '▸'; position: absolute; left: 0; color: var(--blue); font-weight: bold; }
+.slide.dark ul li::before, .slide.section-title ul li::before { color: var(--accent); }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; width: 100%; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 30px; width: 100%; }
+.content-full { width: 100%; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+
+.card { background: var(--light-gray); border-radius: 12px; padding: 24px; border-left: 4px solid var(--blue); }
+.card.accent { border-left-color: var(--accent); }
+.card.green { border-left-color: var(--green); }
+.card.red { border-left-color: var(--red); }
+.card h3 { margin-bottom: 10px; }
+
+.bar-chart { width: 100%; }
+.bar-item { display: flex; align-items: center; margin: 8px 0; }
+.bar-label { width: 200px; font-size: 0.95em; text-align: right; padding-right: 16px; flex-shrink: 0; }
+.bar-track { flex: 1; height: 32px; background: var(--light-gray); border-radius: 6px; overflow: hidden; position: relative; }
+.bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 12px; color: white; font-weight: 600; font-size: 0.9em; transition: width 0.8s ease; }
+.bar-fill.blue { background: linear-gradient(90deg, var(--blue), #4299e1); }
+.bar-fill.navy { background: linear-gradient(90deg, var(--navy), var(--blue)); }
+.bar-fill.green { background: linear-gradient(90deg, #2f855a, var(--green)); }
+.bar-fill.orange { background: linear-gradient(90deg, #c05621, var(--accent)); }
+.bar-fill.red { background: linear-gradient(90deg, #c53030, var(--red)); }
+.bar-fill.gray { background: linear-gradient(90deg, #4a5568, var(--gray)); }
+
+.tag { display: inline-block; padding: 4px 14px; border-radius: 20px; font-size: 0.85em; font-weight: 600; margin: 2px 4px; }
+.tag.high { background: #fed7d7; color: #c53030; }
+.tag.med { background: #fefcbf; color: #975a16; }
+.tag.low { background: #c6f6d5; color: #276749; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
+th { background: var(--navy); color: white; padding: 12px 16px; text-align: left; }
+td { padding: 10px 16px; border-bottom: 1px solid #e2e8f0; }
+tr:nth-child(even) { background: #f7fafc; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; }
+.stat-box { text-align: center; padding: 24px 16px; background: var(--light-gray); border-radius: 12px; }
+.stat-box .number { font-size: 2.8em; font-weight: 800; color: var(--blue); line-height: 1; }
+.stat-box .label { font-size: 0.95em; color: var(--gray); margin-top: 8px; }
+.stat-box.accent .number { color: var(--accent); }
+.stat-box.green .number { color: var(--green); }
+.stat-box.red .number { color: var(--red); }
+
+svg text { font-family: -apple-system, 'PingFang TC', sans-serif; }
+
+.flow-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.flow-step { background: var(--navy); color: white; padding: 14px 22px; border-radius: 10px; font-weight: 600; font-size: 1em; text-align: center; min-width: 120px; }
+.flow-step.alt { background: var(--blue); }
+.flow-step.accent { background: var(--accent); }
+.flow-step.green { background: var(--green); }
+.flow-arrow { font-size: 1.6em; color: var(--blue); font-weight: bold; }
+
+.progress { position: fixed; bottom: 0; left: 0; height: 4px; background: var(--accent); transition: width 0.3s ease; z-index: 100; }
+.page-num { position: fixed; bottom: 16px; right: 30px; font-size: 0.9em; color: rgba(0,0,0,0.4); z-index: 100; font-family: -apple-system, monospace; }
+
+.vs-container { display: grid; grid-template-columns: 1fr 60px 1fr; align-items: start; gap: 0; }
+.vs-badge { display: flex; align-items: center; justify-content: center; font-size: 1.8em; font-weight: 800; color: var(--accent); padding-top: 40px; }
+
+.highlight-num { font-size: 3.5em; font-weight: 800; color: var(--accent); line-height: 1; }
+
+/* Detail text blocks for expanded slides */
+.detail-text { font-size: 1.05em; line-height: 1.8; color: var(--text); }
+.detail-text p { margin-bottom: 12px; }
+.key-insight { background: linear-gradient(135deg, #ebf8ff, #e6fffa); border-left: 4px solid var(--blue); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 12px 0; }
+.key-insight p { font-size: 1em; margin: 0; }
+.warning-box { background: #fff5f5; border-left: 4px solid var(--red); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 12px 0; }
+
+@media (max-width: 1200px) {
+  .slide { padding: 40px 50px; }
+  h1 { font-size: 2.2em; }
+  h2 { font-size: 1.8em; }
+  .bar-label { width: 150px; }
+}
+</style>
+</head>
+<body>
+
+<svg style="position:absolute;width:0;height:0;">
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2b6cb0"/></marker>
+    <marker id="arrowhead-orange" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#ed8936"/></marker>
+    <marker id="arrowhead-white" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="white"/></marker>
+  </defs>
+</svg>
+
+<!-- ===== SLIDE 1: 封面 ===== -->
+<section class="slide cover active">
+  <div style="margin-bottom:20px;font-size:1.1em;opacity:0.8;">📄 完整研究報告投影片（詳細版）</div>
+  <h1 style="font-size:2.6em;">大型程式碼倉庫中<br>LLM 自動化代碼修改技術</h1>
+  <div class="subtitle">基於 86 篇 ArXiv 論文（2023–2026）之研究成果彙整</div>
+  <div style="display:flex;gap:40px;margin-top:30px;font-size:1.1em;opacity:0.85;">
+    <span>📅 2026-02-01</span>
+    <span>📚 86 篇論文</span>
+    <span>🔬 11 個技術領域</span>
+  </div>
+  <div style="margin-top:40px;font-size:0.95em;opacity:0.6;">使用 ← → 鍵翻頁 | 或點擊左右側區域</div>
+</section>
+
+<!-- ===== SLIDE 2: 目錄 ===== -->
+<section class="slide">
+  <h2>📋 報告目錄</h2>
+  <div class="two-col">
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <h3>Part 1：概述（p.3-8）</h3>
+        <p>研究背景、核心發現、論文統計、工業部署</p>
+      </div>
+      <div class="card accent" style="margin-bottom:16px;">
+        <h3>Part 2：技術深度分析（p.9-38）</h3>
+        <p>8 大技術領域 × 深入解析 + 每節詳解頁</p>
+      </div>
+      <div class="card green" style="margin-bottom:16px;">
+        <h3>Part 3：方法論對比（p.39-47）</h3>
+        <p>核心方法、SWE-bench 排行、成本分析、趨勢</p>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="border-left-color:#805ad5;margin-bottom:16px;">
+        <h3>Part 4：建議執行方案（p.48-56）</h3>
+        <p>分層架構、四階段路線圖、技術選型、團隊配置</p>
+      </div>
+      <div class="card red" style="margin-bottom:16px;">
+        <h3>Part 5：難點與挑戰（p.57-62）</h3>
+        <p>9 個關鍵難點逐一深度分析</p>
+      </div>
+      <div class="card green" style="margin-bottom:16px;">
+        <h3>Part 6：總結與展望（p.63-65）</h3>
+        <p>關鍵建議、預期效果、Q&A</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 3: 研究背景 ===== -->
+<section class="slide">
+  <h2>🔬 研究背景與目標</h2>
+  <div class="two-col">
+    <div>
+      <h3>為何需要此研究？</h3>
+      <ul>
+        <li>大型程式碼倉庫（百萬行級）的 Bug 修復耗時耗力</li>
+        <li>LLM 在函數級任務表現優異（GPT-3.5 ~50%+），但倉庫級急劇下降至 22.58%</li>
+        <li>2024-2026 年爆發大量相關研究，亟需系統化梳理</li>
+        <li>工程團隊需要明確的技術選型與部署策略</li>
+      </ul>
+      <h3 style="margin-top:24px;">研究方法</h3>
+      <ul>
+        <li>合併博特一號（33 篇）+ 博特二號（28 篇）+ 補充搜索（31 篇）</li>
+        <li>去重後共 86 篇唯一論文</li>
+        <li>補充搜索聚焦三大缺口領域</li>
+      </ul>
+    </div>
+    <div>
+      <svg viewBox="0 0 400 340" style="width:100%;">
+        <rect x="100" y="10" width="200" height="50" rx="10" fill="#1a365d"/>
+        <text x="200" y="40" text-anchor="middle" fill="white" font-size="14" font-weight="bold">86 篇 ArXiv 論文</text>
+        <line x1="150" y1="60" x2="80" y2="100" stroke="#2b6cb0" stroke-width="2"/>
+        <line x1="200" y1="60" x2="200" y2="100" stroke="#2b6cb0" stroke-width="2"/>
+        <line x1="250" y1="60" x2="320" y2="100" stroke="#2b6cb0" stroke-width="2"/>
+        <rect x="20" y="100" width="120" height="45" rx="8" fill="#2b6cb0"/>
+        <text x="80" y="126" text-anchor="middle" fill="white" font-size="12" font-weight="600">博特一號</text>
+        <text x="80" y="140" text-anchor="middle" fill="white" font-size="11">33 篇</text>
+        <rect x="150" y="100" width="100" height="45" rx="8" fill="#2b6cb0"/>
+        <text x="200" y="126" text-anchor="middle" fill="white" font-size="12" font-weight="600">博特二號</text>
+        <text x="200" y="140" text-anchor="middle" fill="white" font-size="11">28 篇</text>
+        <rect x="260" y="100" width="120" height="45" rx="8" fill="#ed8936"/>
+        <text x="320" y="126" text-anchor="middle" fill="white" font-size="12" font-weight="600">補充搜索</text>
+        <text x="320" y="140" text-anchor="middle" fill="white" font-size="11">31 篇</text>
+        <line x1="320" y1="145" x2="280" y2="180" stroke="#ed8936" stroke-width="1.5"/>
+        <line x1="320" y1="145" x2="320" y2="180" stroke="#ed8936" stroke-width="1.5"/>
+        <line x1="320" y1="145" x2="360" y2="180" stroke="#ed8936" stroke-width="1.5"/>
+        <rect x="220" y="180" width="120" height="30" rx="6" fill="#fff5eb" stroke="#ed8936"/>
+        <text x="280" y="200" text-anchor="middle" fill="#c05621" font-size="10">靜態分析整合 12篇</text>
+        <rect x="220" y="218" width="120" height="30" rx="6" fill="#fff5eb" stroke="#ed8936"/>
+        <text x="280" y="238" text-anchor="middle" fill="#c05621" font-size="10">安全漏洞修補 10篇</text>
+        <rect x="220" y="256" width="120" height="30" rx="6" fill="#fff5eb" stroke="#ed8936"/>
+        <text x="280" y="276" text-anchor="middle" fill="#c05621" font-size="10">CI/CD 修復 10篇</text>
+        <rect x="20" y="200" width="180" height="30" rx="6" fill="#ebf8ff" stroke="#2b6cb0"/>
+        <text x="110" y="220" text-anchor="middle" fill="#2b6cb0" font-size="12">時間跨度：2023–2026</text>
+        <rect x="20" y="240" width="180" height="30" rx="6" fill="#ebf8ff" stroke="#2b6cb0"/>
+        <text x="110" y="260" text-anchor="middle" fill="#2b6cb0" font-size="12">目標：工程團隊建構指南</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 4: 九大核心發現 ===== -->
+<section class="slide">
+  <h2>🎯 核心發現摘要</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;">
+    <div class="card red">
+      <h3 style="font-size:1.1em;">① 倉庫級仍是巨大挑戰</h3>
+      <p style="font-size:0.9em;">GPT-3.5 從函數級 ~50%+ 降至倉庫級 22.58%。最先進系統僅達 60.4%</p>
+    </div>
+    <div class="card green">
+      <h3 style="font-size:1.1em;">② Agentless 與 Agent 融合</h3>
+      <p style="font-size:0.9em;">Kimi-Dev 證明兩者互補：Agentless 技能先驗 → Agent 適應</p>
+    </div>
+    <div class="card accent">
+      <h3 style="font-size:1.1em;">③ 定位是瓶頸中的瓶頸</h3>
+      <p style="font-size:0.9em;">RGFL Hit@1 從 71.4%→85%，帶來 12.8% 端到端修復提升</p>
+    </div>
+    <div class="card">
+      <h3 style="font-size:1.1em;">④ 上下文管理成核心議題</h3>
+      <p style="font-size:0.9em;">CAT 達 57.6% 解決率；SWE-Pruner 節省 23-54% token</p>
+    </div>
+    <div class="card red">
+      <h3 style="font-size:1.1em;">⑤ SWE-Bench+ 揭示真相</h3>
+      <p style="font-size:0.9em;">過濾洩漏和弱測試後，真實解決率僅 3.97%</p>
+    </div>
+    <div class="card">
+      <h3 style="font-size:1.1em;">⑥ 工業部署仍稀少</h3>
+      <p style="font-size:0.9em;">僅 Google、字節跳動、Kodezi、騰訊有明確部署報告</p>
+    </div>
+    <div class="card green">
+      <h3 style="font-size:1.1em;">⑦ LLM+靜態分析前景明確</h3>
+      <p style="font-size:0.9em;">KNighter 30 個 CVE；騰訊誤報降 94-98%，成本 $0.001-0.12</p>
+    </div>
+    <div class="card accent">
+      <h3 style="font-size:1.1em;">⑧ 安全漏洞修補改進空間大</h3>
+      <p style="font-size:0.9em;">Exploit-based 評估最佳僅 21.7%，APR 對抗成功率 0.91</p>
+    </div>
+    <div class="card green">
+      <h3 style="font-size:1.1em;">⑨ CI/CD 自動修復漸成熟</h3>
+      <p style="font-size:0.9em;">GradleFixer 81.4%、IaCGen 54.6-91.6%、翻譯成功率 75.5%</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 5: 論文統計 ===== -->
+<section class="slide">
+  <h2>📊 論文統計總覽</h2>
+  <div class="two-col">
+    <div>
+      <h3>分類分佈</h3>
+      <div class="bar-chart">
+        <div class="bar-item"><div class="bar-label">🐛 缺陷修復</div><div class="bar-track"><div class="bar-fill blue" style="width:55%;">12 篇</div></div></div>
+        <div class="bar-item"><div class="bar-label">🤖 SWE 智能代理</div><div class="bar-track"><div class="bar-fill blue" style="width:46%;">10 篇</div></div></div>
+        <div class="bar-item"><div class="bar-label">📐 基準測試</div><div class="bar-track"><div class="bar-fill navy" style="width:55%;">12 篇</div></div></div>
+        <div class="bar-item"><div class="bar-label">🔐 靜態分析整合</div><div class="bar-track"><div class="bar-fill orange" style="width:55%;">12 篇</div></div></div>
+        <div class="bar-item"><div class="bar-label">🛡️ 安全漏洞修補</div><div class="bar-track"><div class="bar-fill red" style="width:46%;">10 篇</div></div></div>
+        <div class="bar-item"><div class="bar-label">🔄 CI/CD 修復</div><div class="bar-track"><div class="bar-fill green" style="width:46%;">10 篇</div></div></div>
+        <div class="bar-item"><div class="bar-label">🧠 程式碼理解</div><div class="bar-track"><div class="bar-fill blue" style="width:46%;">10 篇</div></div></div>
+        <div class="bar-item"><div class="bar-label">🔄 程式碼遷移</div><div class="bar-track"><div class="bar-fill gray" style="width:18%;">4 篇</div></div></div>
+        <div class="bar-item"><div class="bar-label">🎯 故障定位</div><div class="bar-track"><div class="bar-fill gray" style="width:18%;">4 篇</div></div></div>
+        <div class="bar-item"><div class="bar-label">🔍 程式碼審查</div><div class="bar-track"><div class="bar-fill gray" style="width:14%;">3 篇</div></div></div>
+      </div>
+    </div>
+    <div>
+      <h3>時間分佈</h3>
+      <div class="bar-chart" style="margin-bottom:30px;">
+        <div class="bar-item"><div class="bar-label">2023</div><div class="bar-track"><div class="bar-fill gray" style="width:5%;">1</div></div></div>
+        <div class="bar-item"><div class="bar-label">2024</div><div class="bar-track"><div class="bar-fill blue" style="width:20%;">~10</div></div></div>
+        <div class="bar-item"><div class="bar-label">2025</div><div class="bar-track"><div class="bar-fill navy" style="width:75%;">~45</div></div></div>
+        <div class="bar-item"><div class="bar-label">2026</div><div class="bar-track"><div class="bar-fill orange" style="width:55%;">~30</div></div></div>
+      </div>
+      <h3>來源分佈</h3>
+      <div class="stat-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="stat-box"><div class="number" style="font-size:2em;">15</div><div class="label">共有論文</div></div>
+        <div class="stat-box"><div class="number" style="font-size:2em;">25</div><div class="label">一號獨有</div></div>
+        <div class="stat-box"><div class="number" style="font-size:2em;">17</div><div class="label">二號獨有</div></div>
+        <div class="stat-box accent"><div class="number" style="font-size:2em;">31</div><div class="label">補充搜索</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 6: 論文時間趨勢分析 ===== -->
+<section class="slide">
+  <h2>📈 論文時間趨勢與研究熱點演進</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>研究爆發的三個階段</h3>
+      <p><strong>2023 年（萌芽期）</strong>：僅 SWE-bench 一篇奠基性工作，定義了倉庫級 LLM 評估的基準框架。此時學術界才開始意識到「函數級→倉庫級」的巨大鴻溝。</p>
+      <p><strong>2024 年（起步期，~10 篇）</strong>：SWE-agent 首次突破 12.5%，Agentless 以 $0.70 成本達到 32%，證明了工程可行性。IRIS、SWE-Bench+ 等開始深入特定領域。</p>
+      <p><strong>2025-2026 年（爆發期，~75 篇）</strong>：研究數量激增近 8 倍。Kimi-Dev 60.4% 刷新紀錄，靜態分析整合（KNighter 30 CVE）和安全修補成為新熱點。三大缺口領域（靜態分析/安全/CI-CD）各湧現 10-12 篇專題研究。</p>
+      <div class="key-insight">
+        <p><strong>💡 趨勢洞見</strong>：研究正從「能不能做」轉向「做得好不好」。2025 年後的論文更關注精確度、安全性、成本效益和工業落地，而非單純追求 SWE-bench 分數。</p>
+      </div>
+    </div>
+    <div>
+      <h3>各領域論文數量時間線</h3>
+      <svg viewBox="0 0 380 300" style="width:100%;">
+        <line x1="50" y1="260" x2="360" y2="260" stroke="#718096" stroke-width="1"/>
+        <line x1="50" y1="20" x2="50" y2="260" stroke="#718096" stroke-width="1"/>
+        <text x="45" y="260" text-anchor="end" fill="#718096" font-size="10">0</text>
+        <text x="45" y="180" text-anchor="end" fill="#718096" font-size="10">10</text>
+        <text x="45" y="100" text-anchor="end" fill="#718096" font-size="10">20</text>
+        <text x="45" y="40" text-anchor="end" fill="#718096" font-size="10">30</text>
+        <text x="110" y="278" text-anchor="middle" fill="#718096" font-size="10">2023</text>
+        <text x="190" y="278" text-anchor="middle" fill="#718096" font-size="10">2024</text>
+        <text x="270" y="278" text-anchor="middle" fill="#718096" font-size="10">2025</text>
+        <text x="340" y="278" text-anchor="middle" fill="#718096" font-size="10">2026</text>
+        <!-- Bars -->
+        <rect x="95" y="252" width="30" height="8" rx="3" fill="#718096"/>
+        <rect x="175" y="180" width="30" height="80" rx="3" fill="#2b6cb0"/>
+        <rect x="255" y="60" width="30" height="200" rx="3" fill="#1a365d"/>
+        <rect x="325" y="100" width="30" height="160" rx="3" fill="#ed8936"/>
+        <!-- Labels -->
+        <text x="110" y="248" text-anchor="middle" fill="#718096" font-size="10" font-weight="bold">1</text>
+        <text x="190" y="175" text-anchor="middle" fill="#2b6cb0" font-size="10" font-weight="bold">~10</text>
+        <text x="270" y="55" text-anchor="middle" fill="#1a365d" font-size="10" font-weight="bold">~45</text>
+        <text x="340" y="95" text-anchor="middle" fill="#ed8936" font-size="10" font-weight="bold">~30</text>
+      </svg>
+      <div class="card" style="padding:16px;margin-top:12px;">
+        <p style="font-size:0.9em;"><strong>2025 年研究熱點</strong>：Multi-Agent 系統、RL 訓練、靜態分析整合、安全漏洞修補成為四大主流方向，佔全部論文 60%+。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 7: 工業部署 ===== -->
+<section class="slide">
+  <h2>🏭 工業部署現況</h2>
+  <div class="stat-grid" style="grid-template-columns:1fr 1fr;gap:24px;margin-bottom:30px;">
+    <div class="card green">
+      <h3>🔵 Google</h3>
+      <p>LLM Agents 自動生成 Bug Reproduction Tests</p>
+      <p class="small" style="margin-top:8px;">唯一在工業 Monorepo 上評估的案例</p>
+    </div>
+    <div class="card green">
+      <h3>🟣 字節跳動</h3>
+      <p>ContextCRBench 細粒度 hunk 級程式碼審查</p>
+      <p class="small" style="margin-top:8px;">表現提升 61.98%</p>
+    </div>
+    <div class="card green">
+      <h3>🟠 騰訊</h3>
+      <p>LLM + SAST 消除 94-98% 誤報</p>
+      <p class="small" style="margin-top:8px;">首個工業級 LLM+SAST 實證，$0.001-0.12/告警</p>
+    </div>
+    <div class="card">
+      <h3>🟤 Kodezi</h3>
+      <p>Chronos Debugging-first Language Model</p>
+      <p class="small" style="margin-top:8px;">Debugging-first 設計的 LM</p>
+    </div>
+  </div>
+  <div class="card red" style="text-align:center;">
+    <p style="font-size:1.2em;font-weight:600;">⚠️ 工業部署仍然稀少 — 絕大多數研究停留在學術 Benchmark 階段</p>
+  </div>
+</section>
+
+<!-- ===== SLIDE 8: 工業部署詳解 ===== -->
+<section class="slide">
+  <h2>🏭 工業部署差距分析</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>為什麼學術→工業落差如此巨大？</h3>
+      <p>86 篇論文中僅 4 篇有明確工業部署報告，佔比不到 5%。這背後有深層原因：</p>
+      <ul>
+        <li><strong>評估環境差異</strong>：學術 Benchmark（SWE-bench）使用精選的中小型開源 repo，而企業 monorepo 可達數十億行，複雜度高出數個數量級</li>
+        <li><strong>安全合規門檻</strong>：自動生成的 patch 需要嚴格的安全審查流程，VulnRepairEval 揭示最佳模型 exploit-based 評估僅 21.7%</li>
+        <li><strong>成本可控性</strong>：Agent 系統每個 issue $5-50，對於每天數百個 issue 的大型團隊，成本可能失控</li>
+        <li><strong>可靠性要求</strong>：工業環境不容許「有時 work 有時不 work」的隨機行為</li>
+      </ul>
+      <div class="key-insight">
+        <p><strong>💡 突破口</strong>：騰訊的 LLM+SAST 研究是最成功的工業案例——每條告警僅 $0.001-0.12，投入產出比極高。<strong>從輔助性任務（誤報過濾、測試生成）切入</strong>，比直接做端到端修復更容易落地。</p>
+      </div>
+    </div>
+    <div>
+      <h3>工業落地成熟度評估</h3>
+      <table style="font-size:0.88em;">
+        <tr><th>領域</th><th>成熟度</th><th>代表</th></tr>
+        <tr><td>SAST 誤報過濾</td><td><span class="tag low">🟢 可部署</span></td><td>騰訊 94-98%</td></tr>
+        <tr><td>程式碼審查輔助</td><td><span class="tag low">🟢 可部署</span></td><td>字節 +61.98%</td></tr>
+        <tr><td>構建修復</td><td><span class="tag med">🟡 接近</span></td><td>GradleFixer 81%</td></tr>
+        <tr><td>簡單 Bug 修復</td><td><span class="tag med">🟡 接近</span></td><td>Agentless 32%</td></tr>
+        <tr><td>複雜 Bug 修復</td><td><span class="tag high">🔴 研究中</span></td><td>Kimi-Dev 60%</td></tr>
+        <tr><td>安全漏洞修補</td><td><span class="tag high">🔴 研究中</span></td><td>VulnRepairEval 21%</td></tr>
+      </table>
+      <div class="card accent" style="margin-top:16px;padding:16px;">
+        <p style="font-size:0.95em;"><strong>建議策略</strong>：從綠燈領域開始部署，逐步向黃燈擴展。紅燈領域持續追蹤研究進展，不急於生產環境部署。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 9: Part 2 Section ===== -->
+<section class="slide section-title">
+  <div style="font-size:1.2em;opacity:0.7;margin-bottom:10px;">Part 2</div>
+  <h1>技術深度分析</h1>
+  <div class="subtitle">8 大技術領域 × 深度解析</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:center;margin-top:20px;">
+    <span class="tag" style="background:rgba(255,255,255,0.2);color:white;">故障定位</span>
+    <span class="tag" style="background:rgba(255,255,255,0.2);color:white;">上下文管理</span>
+    <span class="tag" style="background:rgba(255,255,255,0.2);color:white;">修復生成</span>
+    <span class="tag" style="background:rgba(255,255,255,0.2);color:white;">驗證測試</span>
+    <span class="tag" style="background:rgba(255,255,255,0.2);color:white;">多檔案協調</span>
+    <span class="tag" style="background:rgba(255,255,255,0.2);color:white;">靜態分析</span>
+    <span class="tag" style="background:rgba(255,255,255,0.2);color:white;">安全漏洞</span>
+    <span class="tag" style="background:rgba(255,255,255,0.2);color:white;">CI/CD</span>
+  </div>
+</section>
+
+<!-- ===== SLIDE 10: 故障定位 概覽 ===== -->
+<section class="slide">
+  <h2>🎯 故障定位（Fault Localization）— 概覽</h2>
+  <div class="two-col">
+    <div>
+      <div class="card red" style="margin-bottom:16px;">
+        <h3>為什麼是瓶頸？</h3>
+        <p>百萬行級倉庫中，需要從數千個檔案精確找到關鍵的幾行程式碼。定位錯誤 = 後續全部白費。</p>
+      </div>
+      <h3>7 大定位技術</h3>
+      <ul>
+        <li><strong>RGFL</strong>：分層推理（Repo→File→Function→Line）</li>
+        <li><strong>FuseSearch</strong>：多路並行搜索 + RL 策略</li>
+        <li><strong>RepoLens</strong>：概念知識圖抽取</li>
+        <li><strong>InfCode-C++</strong>：語意意圖 + AST 查詢</li>
+        <li><strong>Reformulate-Retrieve</strong>：LLM 改寫 Bug Report</li>
+        <li><strong>NL-Summarization</strong>：跨 Repo 摘要橋接</li>
+        <li><strong>Time Travel</strong>：LLM + Git Bisect</li>
+      </ul>
+    </div>
+    <div>
+      <h3>定位效能數據</h3>
+      <div class="bar-chart">
+        <div class="bar-item"><div class="bar-label">RGFL Hit@1</div><div class="bar-track"><div class="bar-fill blue" style="width:85%;">85%</div></div></div>
+        <div class="bar-item"><div class="bar-label">FuseSearch F1</div><div class="bar-track"><div class="bar-fill navy" style="width:84.7%;">84.7%</div></div></div>
+        <div class="bar-item"><div class="bar-label">Time Travel</div><div class="bar-track"><div class="bar-fill green" style="width:80.6%;">80.6%</div></div></div>
+        <div class="bar-item"><div class="bar-label">RGFL 基線</div><div class="bar-track"><div class="bar-fill gray" style="width:71.4%;">71.4%</div></div></div>
+      </div>
+      <div style="margin-top:20px;">
+        <div class="stat-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="stat-box accent"><div class="number" style="font-size:2em;">+12.8%</div><div class="label">端到端修復提升</div></div>
+          <div class="stat-box green"><div class="number" style="font-size:2em;">93.6%</div><div class="label">FuseSearch 加速</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 11: RGFL 架構圖 ===== -->
+<section class="slide">
+  <h2>🎯 RGFL 分層推理架構</h2>
+  <div class="two-col">
+    <div>
+      <svg viewBox="0 0 420 400" style="width:100%;">
+        <rect x="130" y="10" width="160" height="40" rx="8" fill="#ed8936"/>
+        <text x="210" y="35" text-anchor="middle" fill="white" font-size="13" font-weight="bold">Issue Description</text>
+        <line x1="210" y1="50" x2="210" y2="75" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="90" y="80" width="240" height="45" rx="8" fill="#1a365d"/>
+        <text x="210" y="100" text-anchor="middle" fill="white" font-size="12" font-weight="600">Step 1: Bug Explanation Generator</text>
+        <text x="210" y="116" text-anchor="middle" fill="#bee3f8" font-size="10">LLM 生成結構化 Bug 解釋</text>
+        <line x1="210" y1="125" x2="210" y2="150" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="90" y="155" width="240" height="45" rx="8" fill="#2b6cb0"/>
+        <text x="210" y="175" text-anchor="middle" fill="white" font-size="12" font-weight="600">Step 2: Repository-Level Localizer</text>
+        <text x="210" y="191" text-anchor="middle" fill="#bee3f8" font-size="10">檔案級排序 Top-K Files</text>
+        <line x1="210" y1="200" x2="210" y2="225" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="90" y="230" width="240" height="45" rx="8" fill="#2b6cb0"/>
+        <text x="210" y="250" text-anchor="middle" fill="white" font-size="12" font-weight="600">Step 3: Function-Level Localizer</text>
+        <text x="210" y="266" text-anchor="middle" fill="#bee3f8" font-size="10">函數/方法級定位</text>
+        <line x1="210" y1="275" x2="210" y2="300" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="90" y="305" width="240" height="45" rx="8" fill="#38a169"/>
+        <text x="210" y="325" text-anchor="middle" fill="white" font-size="12" font-weight="600">Step 4: Line-Level Localizer</text>
+        <text x="210" y="341" text-anchor="middle" fill="#c6f6d5" font-size="10">精確行級定位 ✓</text>
+        <text x="55" y="105" text-anchor="middle" fill="#718096" font-size="11" transform="rotate(-90,55,105)">粒度逐步細化</text>
+        <line x1="70" y1="80" x2="70" y2="350" stroke="#718096" stroke-width="1" stroke-dasharray="4"/>
+      </svg>
+    </div>
+    <div>
+      <h3>RGFL 核心創新</h3>
+      <ul>
+        <li><strong>結構化 Bug 解釋</strong>：先理解 Bug 機制，再定位</li>
+        <li><strong>分層縮小範圍</strong>：Repo → File → Function → Line</li>
+        <li>每層都利用前一層的輸出作為上下文</li>
+        <li>避免一次性在整個倉庫中搜索</li>
+      </ul>
+      <h3 style="margin-top:24px;">效能數據</h3>
+      <table>
+        <tr><th>指標</th><th>基線</th><th>RGFL</th><th>提升</th></tr>
+        <tr><td>檔案級 Hit@1</td><td>71.4%</td><td><strong>85%</strong></td><td>+13.6pp</td></tr>
+        <tr><td>端到端修復</td><td>—</td><td>—</td><td><strong>+12.8%</strong></td></tr>
+      </table>
+      <div class="card accent" style="margin-top:16px;">
+        <p style="font-size:0.95em;"><strong>關鍵洞見</strong>：定位精度每提升 1%，端到端修復率幾乎等比提升。定位是投資回報最高的環節。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 12: 故障定位詳解 ===== -->
+<section class="slide">
+  <h2>🎯 故障定位詳解：為什麼分層比直接定位好？</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>直接定位的困境</h3>
+      <p>傳統方法嘗試一步到位：從整個倉庫直接定位到具體的行。這在小型專案中可行，但在百萬行級倉庫中面臨三大問題：</p>
+      <ul>
+        <li><strong>搜索空間爆炸</strong>：假設倉庫有 5,000 個檔案、50 萬行程式碼。直接行級定位的搜索空間是 50 萬選 1-10，組合數天文級</li>
+        <li><strong>上下文窗口限制</strong>：即使 200K token，也無法容納整個倉庫的程式碼。必須先縮小範圍再深入</li>
+        <li><strong>語義理解不足</strong>：LLM 對長文本的注意力會稀釋，直接閱讀大量不相關程式碼反而干擾判斷</li>
+      </ul>
+      <h3 style="margin-top:16px;">RGFL 分層策略的優勢</h3>
+      <p>RGFL 將問題分解為四步漸進式縮小：</p>
+      <ul>
+        <li><strong>Step 1 Bug 解釋</strong>：先讓 LLM「理解」Bug 的機制和可能原因，產生結構化的 Bug 假說。這一步相當於資深工程師閱讀 Bug Report 後的初步判斷</li>
+        <li><strong>Step 2 檔案級</strong>：基於 Bug 解釋，將 5,000 個檔案縮小到 Top-5（降低 1000 倍搜索空間）</li>
+        <li><strong>Step 3 函數級</strong>：在 5 個檔案中定位具體函數（再縮小 10-50 倍）</li>
+        <li><strong>Step 4 行級</strong>：在確定的函數中定位精確行數（最終精確定位）</li>
+      </ul>
+    </div>
+    <div class="detail-text">
+      <h3>實驗數據解讀</h3>
+      <div class="card green" style="margin-bottom:16px;">
+        <p style="font-size:0.95em;"><strong>Hit@1: 71.4% → 85%（+13.6pp）</strong></p>
+        <p style="font-size:0.9em;">含義：在所有測試案例中，RGFL 在第一次嘗試就正確定位到目標檔案的比例從 71.4% 提升到 85%。也就是說，每 100 個 Bug，多正確定位了約 14 個。</p>
+      </div>
+      <div class="card accent" style="margin-bottom:16px;">
+        <p style="font-size:0.95em;"><strong>端到端修復 +12.8%</strong></p>
+        <p style="font-size:0.9em;">含義：將 RGFL 整合到 Agentless pipeline 中，最終成功修復的 Bug 數量增加了 12.8%。這說明定位精度的提升幾乎等比例地傳導到最終修復結果。</p>
+      </div>
+      <h3>FuseSearch 的互補策略</h3>
+      <p>FuseSearch 不是分層策略，而是<strong>多路並行搜索</strong>：同時用 grep（關鍵字）、語意搜索（向量嵌入）、AST 搜索（結構查詢）三種方法搜索，再用 RL 策略融合排序。其 4B 參數小模型即可達到 F1 84.7%，且搜索加速 93.6%。</p>
+      <div class="key-insight">
+        <p><strong>💡 實務建議</strong>：RGFL 和 FuseSearch 可以組合使用。FuseSearch 做初始檔案篩選（快速且高準確），RGFL 做精確的函數→行級定位（深度且精確）。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 13: FuseSearch + 定位對比 ===== -->
+<section class="slide">
+  <h2>🎯 FuseSearch 並行搜索與定位對比</h2>
+  <div class="two-col">
+    <div>
+      <h3>FuseSearch 多路搜索架構</h3>
+      <svg viewBox="0 0 380 260" style="width:100%;">
+        <rect x="130" y="5" width="120" height="35" rx="8" fill="#1a365d"/>
+        <text x="190" y="27" text-anchor="middle" fill="white" font-size="12" font-weight="bold">搜索控制器 (RL)</text>
+        <line x1="140" y1="40" x2="60" y2="70" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="190" y1="40" x2="190" y2="70" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="240" y1="40" x2="320" y2="70" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="10" y="75" width="100" height="55" rx="8" fill="#2b6cb0"/>
+        <text x="60" y="98" text-anchor="middle" fill="white" font-size="11" font-weight="600">Grep 搜索</text>
+        <text x="60" y="118" text-anchor="middle" fill="#bee3f8" font-size="9">關鍵字匹配</text>
+        <rect x="140" y="75" width="100" height="55" rx="8" fill="#2b6cb0"/>
+        <text x="190" y="98" text-anchor="middle" fill="white" font-size="11" font-weight="600">語意搜索</text>
+        <text x="190" y="118" text-anchor="middle" fill="#bee3f8" font-size="9">向量嵌入</text>
+        <rect x="270" y="75" width="100" height="55" rx="8" fill="#2b6cb0"/>
+        <text x="320" y="98" text-anchor="middle" fill="white" font-size="11" font-weight="600">AST 搜索</text>
+        <text x="320" y="118" text-anchor="middle" fill="#bee3f8" font-size="9">結構化查詢</text>
+        <line x1="60" y1="130" x2="190" y2="170" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="190" y1="130" x2="190" y2="170" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="320" y1="130" x2="190" y2="170" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="130" y="175" width="120" height="35" rx="8" fill="#38a169"/>
+        <text x="190" y="197" text-anchor="middle" fill="white" font-size="12" font-weight="bold">融合排序</text>
+        <line x1="190" y1="210" x2="190" y2="235" stroke="#38a169" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <text x="190" y="252" text-anchor="middle" fill="#38a169" font-size="13" font-weight="bold">F1: 84.7% (SOTA)</text>
+      </svg>
+    </div>
+    <div>
+      <h3>FuseSearch 4B 效能</h3>
+      <div class="stat-grid" style="grid-template-columns:1fr 1fr;margin-bottom:20px;">
+        <div class="stat-box"><div class="number" style="font-size:2em;">84.7%</div><div class="label">檔案級 F1</div></div>
+        <div class="stat-box green"><div class="number" style="font-size:2em;">93.6%</div><div class="label">搜索加速</div></div>
+        <div class="stat-box accent"><div class="number" style="font-size:2em;">67.7%</div><div class="label">輪次減少</div></div>
+        <div class="stat-box"><div class="number" style="font-size:2em;">4B</div><div class="label">模型參數</div></div>
+      </div>
+      <h3>定位技術綜合對比</h3>
+      <table style="font-size:0.85em;">
+        <tr><th>技術</th><th>指標</th><th>數據</th></tr>
+        <tr><td>RGFL</td><td>Hit@1</td><td><strong>85%</strong></td></tr>
+        <tr><td>FuseSearch</td><td>F1</td><td><strong>84.7%</strong></td></tr>
+        <tr><td>RepoLens</td><td>Hit@k 提升</td><td>+22%</td></tr>
+        <tr><td>RepoLens</td><td>Recall@k 提升</td><td>+46%</td></tr>
+        <tr><td>Time Travel</td><td>Git Bisect</td><td>80.6%</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 14: 上下文管理 ===== -->
+<section class="slide">
+  <h2>📦 上下文管理（Context Management）</h2>
+  <div class="two-col">
+    <div>
+      <div class="card" style="margin-bottom:16px;">
+        <h3>核心挑戰</h3>
+        <p>大型倉庫程式碼量（百萬行）遠超 LLM 上下文窗口。即使 200K token，推理品質仍會退化。</p>
+      </div>
+      <h3>三大核心技術</h3>
+      <div class="card accent" style="margin-bottom:12px;">
+        <h3 style="font-size:1em;">CAT（Context as a Tool）</h3>
+        <p style="font-size:0.9em;">上下文提升為 Agent 可呼叫的工具，避免一次性載入 → <strong>57.6%</strong> 解決率</p>
+      </div>
+      <div class="card green" style="margin-bottom:12px;">
+        <h3 style="font-size:1em;">SWE-Pruner</h3>
+        <p style="font-size:0.9em;">0.6B 參數神經略讀器，逐檔案動態選擇 → 節省 <strong>23-54%</strong> token</p>
+      </div>
+      <div class="card" style="margin-bottom:12px;">
+        <h3 style="font-size:1em;">MemGovern</h3>
+        <p style="font-size:0.9em;">修復經驗結構化為記憶卡 → <strong>135K</strong> 經驗卡，+4.65% 提升</p>
+      </div>
+    </div>
+    <div>
+      <h3>CAT 工具化上下文流程</h3>
+      <svg viewBox="0 0 380 300" style="width:100%;">
+        <rect x="120" y="5" width="140" height="40" rx="8" fill="#1a365d"/>
+        <text x="190" y="30" text-anchor="middle" fill="white" font-size="12" font-weight="bold">LLM Agent</text>
+        <line x1="130" y1="45" x2="60" y2="80" stroke="#ed8936" stroke-width="2" marker-end="url(#arrowhead-orange)"/>
+        <line x1="190" y1="45" x2="190" y2="80" stroke="#ed8936" stroke-width="2" marker-end="url(#arrowhead-orange)"/>
+        <line x1="250" y1="45" x2="320" y2="80" stroke="#ed8936" stroke-width="2" marker-end="url(#arrowhead-orange)"/>
+        <rect x="5" y="85" width="110" height="40" rx="8" fill="#ed8936"/>
+        <text x="60" y="108" text-anchor="middle" fill="white" font-size="11" font-weight="600">get_context()</text>
+        <rect x="130" y="85" width="120" height="40" rx="8" fill="#ed8936"/>
+        <text x="190" y="108" text-anchor="middle" fill="white" font-size="11" font-weight="600">release_context()</text>
+        <rect x="265" y="85" width="110" height="40" rx="8" fill="#ed8936"/>
+        <text x="320" y="108" text-anchor="middle" fill="white" font-size="11" font-weight="600">search_code()</text>
+        <rect x="60" y="155" width="260" height="35" rx="8" fill="#38a169"/>
+        <text x="190" y="177" text-anchor="middle" fill="white" font-size="12" font-weight="bold">SWE-Pruner (0.6B) — 壓縮 23-54%</text>
+        <line x1="190" y1="130" x2="190" y2="150" stroke="#38a169" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="60" y="215" width="260" height="45" rx="8" fill="#edf2f7" stroke="#2b6cb0" stroke-width="1.5"/>
+        <text x="190" y="238" text-anchor="middle" fill="#2b6cb0" font-size="12" font-weight="600">程式碼倉庫（百萬行）</text>
+        <text x="190" y="254" text-anchor="middle" fill="#718096" font-size="10">AST + 呼叫圖 + 語意索引</text>
+        <line x1="190" y1="190" x2="190" y2="210" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+      </svg>
+      <div class="card" style="margin-top:8px;padding:12px;">
+        <p style="font-size:0.9em;"><strong>關鍵洞見</strong>：更多上下文 ≠ 更好結果。精確提取 + 動態壓縮才是正解。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 15: 上下文管理詳解 ===== -->
+<section class="slide">
+  <h2>📦 上下文管理詳解：為什麼上下文是瓶頸？</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>上下文窗口的真正限制</h3>
+      <p>很多人認為「上下文窗口越大越好」，但研究數據揭示了更複雜的現實：</p>
+      <ul>
+        <li><strong>注意力稀釋</strong>：Transformer 的 softmax attention 在 token 數增加時，每個 token 獲得的注意力權重下降。關鍵程式碼片段可能被大量不相關程式碼「淹沒」</li>
+        <li><strong>Lost in the Middle</strong>：LLM 傾向關注 prompt 的開頭和結尾，中間位置的關鍵資訊被忽略。這在超長上下文中尤為嚴重</li>
+        <li><strong>成本指數增長</strong>：200K token 的推理成本是 4K token 的 50 倍，但效果提升遠非線性</li>
+      </ul>
+      <h3 style="margin-top:16px;">SWE-Pruner 的壓縮策略</h3>
+      <p>SWE-Pruner 用一個極輕量的 0.6B 參數模型作為「略讀器」（skimmer），其工作流程是：</p>
+      <ul>
+        <li><strong>逐檔案評估</strong>：對每個候選檔案，Pruner 快速判斷哪些行與當前任務相關</li>
+        <li><strong>動態選擇</strong>：保留相關行，移除不相關的空白、注釋、無關函數</li>
+        <li><strong>結果</strong>：Token 縮減 23-54%，但修復效能幾乎不受影響</li>
+      </ul>
+    </div>
+    <div class="detail-text">
+      <h3>RLCE 如何提升 160%？</h3>
+      <p>RLCE（Repo-Level Context Extraction）的核心發現是：<strong>GPT-3.5 在無上下文策略時只有 22.58% 修復率</strong>，但加入正確的上下文提取後最高可達 160% 提升。</p>
+      <p>RLCE 的三重上下文策略：</p>
+      <div class="card green" style="margin-bottom:12px;padding:14px;">
+        <p style="font-size:0.9em;"><strong>Import Graph</strong>：從目標檔案的 import/include 語句出發，找到所有直接依賴的模組和定義</p>
+      </div>
+      <div class="card accent" style="margin-bottom:12px;padding:14px;">
+        <p style="font-size:0.9em;"><strong>Call Graph</strong>：追蹤函數呼叫鏈，找到上游呼叫者和下游被呼叫者的相關程式碼</p>
+      </div>
+      <div class="card" style="margin-bottom:12px;padding:14px;">
+        <p style="font-size:0.9em;"><strong>Type Hierarchy</strong>：沿型別繼承關係擴展，找到基類、派生類、介面實現中的相關方法</p>
+      </div>
+      <div class="key-insight">
+        <p><strong>💡 核心教訓</strong>：上下文提取策略的選擇比模型大小更重要。同一個 GPT-3.5，不同上下文策略可以帶來 0% 到 160% 的效果差異。這說明「如何餵給 LLM 資訊」比「用哪個 LLM」更關鍵。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 16: 上下文提取技術 ===== -->
+<section class="slide">
+  <h2>📦 上下文提取技術與效能</h2>
+  <div class="two-col">
+    <div>
+      <h3>六大上下文提取技術</h3>
+      <table style="font-size:0.85em;">
+        <tr><th>技術</th><th>方法</th><th>效能</th></tr>
+        <tr><td>RLCE</td><td>Import/Call/Type 圖</td><td>修復<strong>+160%</strong></td></tr>
+        <tr><td>AlignCoder</td><td>RL-trained retriever</td><td>EM <strong>+18.1%</strong></td></tr>
+        <tr><td>RIG</td><td>確定性 Code Graph</td><td>+12.2% / -53.9%</td></tr>
+        <tr><td>RepoShapley</td><td>Shapley 值過濾</td><td>去除有害上下文</td></tr>
+        <tr><td>InlineCoder</td><td>雙向 Inlining</td><td>FSE'26 接收</td></tr>
+        <tr><td>LogicLens</td><td>AST+LLM 語義圖</td><td>多 Repo 影響分析</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Token 節省對比</h3>
+      <div class="bar-chart">
+        <div class="bar-item"><div class="bar-label">SWE-Pruner 最大</div><div class="bar-track"><div class="bar-fill green" style="width:54%;">54%</div></div></div>
+        <div class="bar-item"><div class="bar-label">SWE-Pruner 最小</div><div class="bar-track"><div class="bar-fill green" style="width:23%;">23%</div></div></div>
+        <div class="bar-item"><div class="bar-label">FuseSearch 輪次</div><div class="bar-track"><div class="bar-fill blue" style="width:67.7%;">67.7%</div></div></div>
+        <div class="bar-item"><div class="bar-label">RIG 時間節省</div><div class="bar-track"><div class="bar-fill navy" style="width:53.9%;">53.9%</div></div></div>
+      </div>
+      <h3 style="margin-top:20px;">修復能力提升</h3>
+      <div class="bar-chart">
+        <div class="bar-item"><div class="bar-label">RLCE 最大</div><div class="bar-track"><div class="bar-fill orange" style="width:80%;">+160%</div></div></div>
+        <div class="bar-item"><div class="bar-label">AlignCoder EM</div><div class="bar-track"><div class="bar-fill blue" style="width:36%;">+18.1%</div></div></div>
+        <div class="bar-item"><div class="bar-label">RIG 準確率</div><div class="bar-track"><div class="bar-fill blue" style="width:24%;">+12.2%</div></div></div>
+        <div class="bar-item"><div class="bar-label">MemGovern</div><div class="bar-track"><div class="bar-fill gray" style="width:10%;">+4.65%</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 17: 修復生成 概覽 ===== -->
+<section class="slide">
+  <h2>🔧 修復生成（Patch Generation）— 概覽</h2>
+  <div class="two-col">
+    <div>
+      <h3>8 大修復技術</h3>
+      <ul>
+        <li><strong>Agentless 三階段</strong>：定位→候選 patch→測試過濾（$0.70）</li>
+        <li><strong>REFINE 精煉</strong>：識別近似正確補丁，迭代修正</li>
+        <li><strong>SemAgent</strong>：程式語意約束，減少 hallucination</li>
+        <li><strong>HAFixAgent</strong>：歷史 commit pattern mining</li>
+        <li><strong>Kimi-Dev</strong>：Agentless 訓練→Agent 技能先驗</li>
+        <li><strong>daVinci-Dev</strong>：Agent 原生中期訓練</li>
+        <li><strong>MCTS-CoT</strong>：Monte Carlo Tree Search 推理</li>
+        <li><strong>SWE-Synth</strong>：合成可驗證訓練資料</li>
+      </ul>
+    </div>
+    <div>
+      <h3>SWE-bench 解決率排行</h3>
+      <div class="bar-chart">
+        <div class="bar-item"><div class="bar-label">Kimi-Dev</div><div class="bar-track"><div class="bar-fill orange" style="width:60.4%;">60.4%</div></div></div>
+        <div class="bar-item"><div class="bar-label">daVinci 72B</div><div class="bar-track"><div class="bar-fill blue" style="width:58.5%;">58.5%</div></div></div>
+        <div class="bar-item"><div class="bar-label">CAT</div><div class="bar-track"><div class="bar-fill blue" style="width:57.6%;">57.6%</div></div></div>
+        <div class="bar-item"><div class="bar-label">daVinci 32B</div><div class="bar-track"><div class="bar-fill blue" style="width:56.1%;">56.1%</div></div></div>
+        <div class="bar-item"><div class="bar-label">REFINE</div><div class="bar-track"><div class="bar-fill green" style="width:51.67%;">51.67%</div></div></div>
+        <div class="bar-item"><div class="bar-label">Agentless</div><div class="bar-track"><div class="bar-fill gray" style="width:32%;">32%</div></div></div>
+        <div class="bar-item"><div class="bar-label">InfCode C++</div><div class="bar-track"><div class="bar-fill gray" style="width:25.58%;">25.58%</div></div></div>
+        <div class="bar-item"><div class="bar-label">SWE-agent</div><div class="bar-track"><div class="bar-fill gray" style="width:12.5%;">12.5%</div></div></div>
+      </div>
+      <div class="small" style="margin-top:8px;">⚠️ SWE-Bench+ 真實值僅 3.97%（過濾洩漏+弱測試後）</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 18: 修復生成詳解 ===== -->
+<section class="slide">
+  <h2>🔧 修復生成詳解：Agentless 三階段與 REFINE 精煉</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>Agentless 三階段具體做什麼？</h3>
+      <p><strong>第一階段 — 定位（Localize）</strong>：接收 Issue 描述後，使用分層搜索找到可能需要修改的檔案和函數。輸出一個排序的候選位置列表。整個過程不需要 Agent 探索，純靠 LLM 推理。</p>
+      <p><strong>第二階段 — 生成（Generate）</strong>：對定位到的每個候選位置，用 LLM 生成 5-10 個候選補丁。使用不同的 temperature 採樣，確保多樣性。每個候選補丁都是一個 unified diff 格式。</p>
+      <p><strong>第三階段 — 驗證（Validate）</strong>：執行現有測試套件，過濾掉讓測試失敗的候選補丁。通過所有測試的補丁按置信度排序，選出最佳。</p>
+      <div class="card green" style="margin-top:12px;padding:14px;">
+        <p style="font-size:0.9em;">💰 整個過程成本僅 <strong>$0.70/issue</strong>，因為不需要多輪 Agent 互動，只需 3 次 LLM 呼叫 + 測試執行。</p>
+      </div>
+    </div>
+    <div class="detail-text">
+      <h3>REFINE 為什麼有效？</h3>
+      <p>REFINE 的核心洞見：很多「失敗」的補丁其實是<strong>近似正確</strong>的——它們修對了 80% 的內容，只是某個邊界條件或類型轉換有誤。</p>
+      <p>REFINE 的策略：</p>
+      <ul>
+        <li><strong>識別近似正確補丁</strong>：分析候選補丁的測試通過率和失敗模式，找出「差一點就對」的補丁</li>
+        <li><strong>上下文感知修正</strong>：將近似補丁和其失敗的測試案例一起餵給 LLM，讓它精準修正錯誤部分</li>
+        <li><strong>迭代精煉</strong>：重複此過程直到測試全過或達到上限</li>
+      </ul>
+      <p>效果：REFINE 將 AutoCodeRover 從 37% 提升到 <strong>51.67%</strong>（+14.67pp），這是一個巨大的增量改進。</p>
+      <h3 style="margin-top:16px;">Kimi-Dev 的 Workflow-Agent 融合</h3>
+      <p>Kimi-Dev 的突破在於：先用 Agentless 大量訓練資料訓練模型（學會「技能先驗」），然後將訓練好的模型用在 Agent 系統中。這相當於<strong>先在簡單問題上學會基本功，再在複雜場景中靈活運用</strong>。結果達到 60.4% SOTA。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 19: Agentless vs Agent ===== -->
+<section class="slide">
+  <h2>🔧 Agentless vs Agent 架構對比</h2>
+  <div class="vs-container">
+    <div>
+      <div class="card green" style="margin-bottom:16px;">
+        <h3 style="color:#276749;">🟢 Agentless Pipeline</h3>
+      </div>
+      <svg viewBox="0 0 300 200" style="width:100%;">
+        <rect x="80" y="5" width="140" height="35" rx="8" fill="#38a169"/>
+        <text x="150" y="27" text-anchor="middle" fill="white" font-size="12" font-weight="bold">1. 定位（Localize）</text>
+        <line x1="150" y1="40" x2="150" y2="55" stroke="#38a169" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="80" y="60" width="140" height="35" rx="8" fill="#38a169"/>
+        <text x="150" y="82" text-anchor="middle" fill="white" font-size="12" font-weight="bold">2. 生成（Generate）</text>
+        <line x1="150" y1="95" x2="150" y2="110" stroke="#38a169" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="80" y="115" width="140" height="35" rx="8" fill="#38a169"/>
+        <text x="150" y="137" text-anchor="middle" fill="white" font-size="12" font-weight="bold">3. 驗證（Validate）</text>
+      </svg>
+      <ul style="font-size:0.95em;">
+        <li>✅ 成本極低：$0.70/issue</li>
+        <li>✅ 簡單可解釋</li>
+        <li>✅ 適合 80% 簡單問題</li>
+        <li>❌ 無法處理跨檔案複雜 Bug</li>
+        <li>❌ 缺乏動態探索能力</li>
+      </ul>
+    </div>
+    <div class="vs-badge">VS</div>
+    <div>
+      <div class="card" style="border-left-color:#805ad5;margin-bottom:16px;">
+        <h3 style="color:#553c9a;">🟣 Multi-Agent System</h3>
+      </div>
+      <svg viewBox="0 0 300 200" style="width:100%;">
+        <rect x="90" y="5" width="120" height="30" rx="8" fill="#1a365d"/>
+        <text x="150" y="25" text-anchor="middle" fill="white" font-size="11" font-weight="bold">Planner Agent</text>
+        <line x1="110" y1="35" x2="60" y2="55" stroke="#2b6cb0" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="190" y1="35" x2="240" y2="55" stroke="#2b6cb0" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <rect x="10" y="60" width="100" height="30" rx="8" fill="#2b6cb0"/>
+        <text x="60" y="80" text-anchor="middle" fill="white" font-size="10" font-weight="600">Navigator</text>
+        <rect x="190" y="60" width="100" height="30" rx="8" fill="#2b6cb0"/>
+        <text x="240" y="80" text-anchor="middle" fill="white" font-size="10" font-weight="600">Editor</text>
+        <line x1="60" y1="90" x2="150" y2="120" stroke="#2b6cb0" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <line x1="240" y1="90" x2="150" y2="120" stroke="#2b6cb0" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <rect x="90" y="125" width="120" height="30" rx="8" fill="#ed8936"/>
+        <text x="150" y="145" text-anchor="middle" fill="white" font-size="11" font-weight="bold">Executor Agent</text>
+      </svg>
+      <ul style="font-size:0.95em;">
+        <li>✅ 處理複雜跨檔案問題</li>
+        <li>✅ 動態探索和學習</li>
+        <li>✅ 可自主規劃修復策略</li>
+        <li>❌ 成本高：$5-50/issue</li>
+        <li>❌ 可控性和可解釋性差</li>
+      </ul>
+    </div>
+  </div>
+  <div class="card accent" style="margin-top:16px;text-align:center;">
+    <p><strong>Kimi-Dev 洞見</strong>：兩者可互補！Agentless 訓練產生的技能先驗有助 Agent 適應 → 60.4% SOTA</p>
+  </div>
+</section>
+
+<!-- ===== SLIDE 20: 驗證與測試 ===== -->
+<section class="slide">
+  <h2>✅ 驗證與測試（Validation & Testing）</h2>
+  <div class="two-col">
+    <div>
+      <h3>四層驗證機制</h3>
+      <svg viewBox="0 0 380 260" style="width:100%;">
+        <rect x="40" y="10" width="300" height="50" rx="10" fill="#edf2f7" stroke="#718096"/>
+        <text x="190" y="32" text-anchor="middle" fill="#1a365d" font-size="13" font-weight="bold">Layer 1: 語法驗證</text>
+        <text x="190" y="50" text-anchor="middle" fill="#718096" font-size="10">Lint / 型別檢查 / 編譯驗證</text>
+        <rect x="40" y="70" width="300" height="50" rx="10" fill="#ebf8ff" stroke="#2b6cb0"/>
+        <text x="190" y="92" text-anchor="middle" fill="#1a365d" font-size="13" font-weight="bold">Layer 2: 測試驗證</text>
+        <text x="190" y="110" text-anchor="middle" fill="#2b6cb0" font-size="10">現有測試 + LLM 生成測試 + 回歸測試</text>
+        <rect x="40" y="130" width="300" height="50" rx="10" fill="#fff5f5" stroke="#e53e3e"/>
+        <text x="190" y="152" text-anchor="middle" fill="#1a365d" font-size="13" font-weight="bold">Layer 3: 安全驗證</text>
+        <text x="190" y="170" text-anchor="middle" fill="#c53030" font-size="10">SAST 掃描 + LLM 誤報過濾 + exploit 驗證</text>
+        <rect x="40" y="190" width="300" height="50" rx="10" fill="#f0fff4" stroke="#38a169"/>
+        <text x="190" y="212" text-anchor="middle" fill="#1a365d" font-size="13" font-weight="bold">Layer 4: 語意審查</text>
+        <text x="190" y="230" text-anchor="middle" fill="#276749" font-size="10">LLM 程式碼審查 + 交叉驗證</text>
+      </svg>
+    </div>
+    <div>
+      <h3>驗證效能數據</h3>
+      <div class="bar-chart">
+        <div class="bar-item"><div class="bar-label">AACR 缺陷覆蓋</div><div class="bar-track"><div class="bar-fill orange" style="width:95%;">+285%</div></div></div>
+        <div class="bar-item"><div class="bar-label">字節 CR 提升</div><div class="bar-track"><div class="bar-fill blue" style="width:62%;">+61.98%</div></div></div>
+        <div class="bar-item"><div class="bar-label">MAVM 修復數</div><div class="bar-track"><div class="bar-fill green" style="width:51%;">51 漏洞</div></div></div>
+        <div class="bar-item"><div class="bar-label">MAVM vs 基線</div><div class="bar-track"><div class="bar-fill green" style="width:45.2%;">+31.9-45.2%</div></div></div>
+      </div>
+      <div class="card accent" style="margin-top:20px;">
+        <h3 style="font-size:1em;">SWT-Bench 關鍵發現</h3>
+        <p style="font-size:0.9em;">LLM 將 Issue 形式化為測試案例，用作補丁篩選器 → SWE-Agent 精確度<strong>翻倍</strong></p>
+      </div>
+      <div class="card red" style="margin-top:12px;">
+        <h3 style="font-size:1em;">SWE-Bench+ 警示</h3>
+        <p style="font-size:0.9em;">31.08% 通過的 patch 因 weak test cases。測試本身需要品質保證！</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 21: SWE-Bench 評估問題詳解 ===== -->
+<section class="slide">
+  <h2>⚠️ SWE-Bench+ 評估問題詳解</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>32% 答案洩漏是怎麼發現的？</h3>
+      <p>SWE-Bench+ 研究團隊對 SWE-bench 中所有被標記為「已解決」的案例進行了深入分析，發現了三個嚴重問題：</p>
+      <ul>
+        <li><strong>Solution Leakage（32.67%）</strong>：在 LLM 的訓練資料截止日期之前，這些 issue 的修復方案已經公開在 GitHub 上。LLM 可能「記住」了答案，而非真正推理出修復方案</li>
+        <li><strong>Weak Test Cases（31.08%）</strong>：測試套件不夠嚴格，某些「錯誤」的補丁也能通過測試。例如只修改了錯誤訊息文字但未修復根因的補丁，因為測試只檢查返回值不檢查錯誤路徑</li>
+        <li><strong>94%+ 時間重疊</strong>：94% 以上的 issue 在 LLM knowledge cutoff 之前就已經被解決，存在嚴重的數據汙染風險</li>
+      </ul>
+      <div class="warning-box">
+        <p style="font-size:0.95em;"><strong>⚠️ 真實解決率</strong>：過濾以上問題後，原本 12.47% 的解決率降至僅 <strong>3.97%</strong>。這意味著業界報告的 SWE-bench 分數可能被嚴重高估了 3 倍以上。</p>
+      </div>
+    </div>
+    <div class="detail-text">
+      <h3>對業界的深遠影響</h3>
+      <p>SWE-Bench+ 的發現對整個 LLM 代碼修復領域產生了衝擊：</p>
+      <ul>
+        <li><strong>排行榜信任危機</strong>：SWE-bench 排行榜上的數字可能不代表真實能力。Kimi-Dev 的 60.4% 在嚴格過濾後可能大幅縮水</li>
+        <li><strong>方法論反思</strong>：需要更嚴格的評估基準，如 SWE-Bench++ 擴展至 11 語言、Breakpoint 使用對抗性損壞</li>
+        <li><strong>時間感知評估</strong>：未來的 benchmark 應確保評估的 issue 在 LLM 訓練資料截止日期之後</li>
+      </ul>
+      <h3 style="margin-top:16px;">Breakpoint 的極端測試</h3>
+      <p>Breakpoint 研究更進一步，測試了系統級推理能力：在真實倉庫中人為引入對抗性損壞，要求模型找到並修復。結果：<strong>在最難任務上，SOTA 模型成功率為 0%</strong>。這說明當前 LLM 的推理能力遠未達到處理複雜系統問題的水平。</p>
+      <div class="card accent" style="margin-top:12px;padding:14px;">
+        <p style="font-size:0.9em;"><strong>實務啟示</strong>：不要過度依賴 SWE-bench 分數做技術決策。在自己的代碼庫上做實測評估更可靠。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 22: 多檔案協調 ===== -->
+<section class="slide">
+  <h2>🔗 多檔案協調（Multi-file Coordination）</h2>
+  <div class="two-col">
+    <div>
+      <h3>HyperAgent 四代理架構</h3>
+      <svg viewBox="0 0 380 260" style="width:100%;">
+        <rect x="120" y="10" width="140" height="45" rx="10" fill="#1a365d"/>
+        <text x="190" y="32" text-anchor="middle" fill="white" font-size="13" font-weight="bold">🧠 Planner</text>
+        <text x="190" y="48" text-anchor="middle" fill="#bee3f8" font-size="10">任務規劃與分配</text>
+        <line x1="150" y1="55" x2="80" y2="85" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="230" y1="55" x2="300" y2="85" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="20" y="90" width="130" height="45" rx="10" fill="#2b6cb0"/>
+        <text x="85" y="112" text-anchor="middle" fill="white" font-size="12" font-weight="bold">🔍 Navigator</text>
+        <text x="85" y="128" text-anchor="middle" fill="#bee3f8" font-size="10">程式碼搜索探索</text>
+        <rect x="230" y="90" width="130" height="45" rx="10" fill="#2b6cb0"/>
+        <text x="295" y="112" text-anchor="middle" fill="white" font-size="12" font-weight="bold">✏️ Editor</text>
+        <text x="295" y="128" text-anchor="middle" fill="#bee3f8" font-size="10">程式碼修改生成</text>
+        <line x1="85" y1="135" x2="155" y2="175" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="295" y1="135" x2="225" y2="175" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="120" y="180" width="140" height="45" rx="10" fill="#ed8936"/>
+        <text x="190" y="202" text-anchor="middle" fill="white" font-size="13" font-weight="bold">⚡ Executor</text>
+        <text x="190" y="218" text-anchor="middle" fill="white" font-size="10">執行與驗證</text>
+      </svg>
+    </div>
+    <div>
+      <h3>核心技術對比</h3>
+      <table style="font-size:0.9em;">
+        <tr><th>技術</th><th>方法</th><th>效能</th></tr>
+        <tr><td>HyperAgent</td><td>四代理架構</td><td>Multi-benchmark SOTA</td></tr>
+        <tr><td>BOAD 36B</td><td>MAB 自動發現</td><td>SWE-bench-Live <strong>第二</strong></td></tr>
+        <tr><td>InfCode-C++</td><td>混合搜索</td><td><strong>+10.85pp</strong></td></tr>
+      </table>
+      <h3 style="margin-top:20px;">跨檔案推理難點</h3>
+      <div class="card red">
+        <ul style="font-size:0.9em;">
+          <li><strong>Concern Tangling</strong>：一個檔案混雜多個功能</li>
+          <li><strong>Concern Scattering</strong>：一個功能分散多個檔案</li>
+          <li><strong>隱式依賴</strong>：Runtime 行為、Config 難以從文本推斷</li>
+          <li><strong>Aggregation Deficit</strong>：整合寬度不足</li>
+        </ul>
+      </div>
+      <div class="card green" style="margin-top:12px;">
+        <p style="font-size:0.9em;"><strong>BOAD 亮點</strong>：36B 開源模型在 SWE-bench-Live 排名第二，超越 GPT-4 和 Claude！</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 23: 靜態分析 Section ===== -->
+<section class="slide section-title">
+  <div style="font-size:5em;margin-bottom:20px;">🔐</div>
+  <h1>LLM + 靜態分析整合</h1>
+  <div class="subtitle">12 篇論文 | 最具工業落地潛力的方向</div>
+</section>
+
+<!-- ===== SLIDE 24: 靜態分析概覽 ===== -->
+<section class="slide">
+  <h2>🔐 LLM + 靜態分析整合 — 概覽</h2>
+  <div class="two-col">
+    <div>
+      <h3>核心思路</h3>
+      <p style="margin-bottom:16px;">用 LLM 增強靜態分析器的精確度、自動合成分析規則、大幅降低誤報。</p>
+      <h3>12 大技術方案</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.9em;">
+        <div class="card" style="padding:12px;"><strong>KNighter</strong><br>合成 checker</div>
+        <div class="card" style="padding:12px;"><strong>IRIS</strong><br>Taint 推斷</div>
+        <div class="card" style="padding:12px;"><strong>SAST-Genius</strong><br>Semgrep 混合</div>
+        <div class="card" style="padding:12px;"><strong>騰訊研究</strong><br>工業級實證</div>
+        <div class="card" style="padding:12px;"><strong>BugLens</strong><br>後精煉推理</div>
+        <div class="card" style="padding:12px;"><strong>PredicateFix</strong><br>謂詞橋接</div>
+        <div class="card" style="padding:12px;"><strong>QLCoder</strong><br>CodeQL 合成</div>
+        <div class="card" style="padding:12px;"><strong>AdaTaint</strong><br>自適應 Taint</div>
+        <div class="card" style="padding:12px;"><strong>RAG+Multi</strong><br>多工具精煉</div>
+        <div class="card" style="padding:12px;"><strong>BugScope</strong><br>多代理審計</div>
+      </div>
+    </div>
+    <div>
+      <h3>關鍵效能數據</h3>
+      <div class="bar-chart">
+        <div class="bar-item"><div class="bar-label">騰訊誤報降低</div><div class="bar-track"><div class="bar-fill green" style="width:98%;">94-98%</div></div></div>
+        <div class="bar-item"><div class="bar-label">DeepSeek 漏洞降</div><div class="bar-track"><div class="bar-fill green" style="width:96%;">96%</div></div></div>
+        <div class="bar-item"><div class="bar-label">SAST-Genius</div><div class="bar-track"><div class="bar-fill blue" style="width:91%;">91%</div></div></div>
+        <div class="bar-item"><div class="bar-label">BugScope 精確率</div><div class="bar-track"><div class="bar-fill blue" style="width:87%;">87%</div></div></div>
+        <div class="bar-item"><div class="bar-label">IRIS 提升</div><div class="bar-track"><div class="bar-fill orange" style="width:55%;">27→55/120</div></div></div>
+        <div class="bar-item"><div class="bar-label">QLCoder</div><div class="bar-track"><div class="bar-fill navy" style="width:53.4%;">53.4%</div></div></div>
+      </div>
+      <div class="stat-grid" style="grid-template-columns:1fr 1fr;margin-top:16px;">
+        <div class="stat-box accent"><div class="number" style="font-size:1.8em;">30</div><div class="label">KNighter Linux CVE</div></div>
+        <div class="stat-box green"><div class="number" style="font-size:1.6em;">$0.001</div><div class="label">最低告警成本</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 25: 靜態分析詳解 ===== -->
+<section class="slide">
+  <h2>🔐 靜態分析詳解：KNighter 與 IRIS 的工作原理</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>KNighter：從歷史 Bug 合成 Checker</h3>
+      <p>KNighter 的創新在於<strong>自動化靜態分析規則的生成</strong>，而不是讓人工編寫 Checker。其工作流程：</p>
+      <ul>
+        <li><strong>Step 1 — 模式挖掘</strong>：從 Linux kernel 的歷史 commit 中提取 bug-fix pattern。每個 pattern 描述了一種特定的 bug 類型和修復方式</li>
+        <li><strong>Step 2 — Checker 合成</strong>：LLM 將 bug pattern 轉換為靜態分析規則（Checker 代碼）。這是多階段合成：先生成草案，再逐步精煉</li>
+        <li><strong>Step 3 — 自動迭代精煉</strong>：在已知 bug 上測試 Checker，根據 false positive / false negative 反饋自動調整</li>
+        <li><strong>Step 4 — 掃描</strong>：用精煉後的 Checker 掃描整個 Linux kernel</li>
+      </ul>
+      <div class="card red" style="margin-top:12px;padding:14px;">
+        <p style="font-size:0.9em;">🎯 結果：發現 <strong>30 個 CVE</strong> 和 92 個新 bug，被 SOSP'25 頂會接收。這證明 LLM 合成的 Checker 能力可以超越人工編寫的規則。</p>
+      </div>
+    </div>
+    <div class="detail-text">
+      <h3>IRIS：如何推斷 Taint 規格</h3>
+      <p>傳統 CodeQL 檢測需要人工定義 source/sink/sanitizer 三元組。IRIS 用 LLM 自動推斷這些規格：</p>
+      <ul>
+        <li><strong>Source 推斷</strong>：LLM 分析函數簽名和文檔，判斷哪些函數返回不可信數據（如 user input、network data）</li>
+        <li><strong>Sink 推斷</strong>：LLM 判斷哪些函數對輸入數據有安全要求（如 SQL query、command execution）</li>
+        <li><strong>上下文分析</strong>：LLM 進一步分析每個可疑路徑的上下文，判斷是否存在有效的 sanitization</li>
+      </ul>
+      <p><strong>結果</strong>：CWE-Bench-Java 上檢測從 27→55/120（+103%），並額外發現了 4 個之前未知的真實漏洞。</p>
+      <h3 style="margin-top:16px;">騰訊工業部署的啟示</h3>
+      <p>騰訊的研究是首個在工業環境中大規模驗證 LLM+SAST 效果的案例。關鍵數據：每條告警處理成本 $0.001-0.12，而人工審查需要 10-20 分鐘/條。在告警量龐大的工業環境中，這意味著<strong>數百倍的效率提升</strong>。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 26: KNighter & IRIS 架構圖 ===== -->
+<section class="slide">
+  <h2>🔐 KNighter / IRIS 架構圖</h2>
+  <div class="two-col">
+    <div>
+      <h3>KNighter：LLM 合成靜態分析 Checker</h3>
+      <svg viewBox="0 0 360 280" style="width:100%;">
+        <rect x="100" y="5" width="160" height="35" rx="8" fill="#ed8936"/>
+        <text x="180" y="27" text-anchor="middle" fill="white" font-size="11" font-weight="bold">歷史 Bug 模式庫</text>
+        <line x1="180" y1="40" x2="180" y2="60" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="80" y="65" width="200" height="40" rx="8" fill="#1a365d"/>
+        <text x="180" y="85" text-anchor="middle" fill="white" font-size="12" font-weight="bold">LLM 多階段合成</text>
+        <text x="180" y="99" text-anchor="middle" fill="#bee3f8" font-size="9">分析模式 → Checker 代碼</text>
+        <line x1="180" y1="105" x2="180" y2="125" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="80" y="130" width="200" height="35" rx="8" fill="#2b6cb0"/>
+        <text x="180" y="152" text-anchor="middle" fill="white" font-size="11" font-weight="bold">自動迭代精煉</text>
+        <line x1="180" y1="165" x2="180" y2="185" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="60" y="190" width="240" height="35" rx="8" fill="#38a169"/>
+        <text x="180" y="212" text-anchor="middle" fill="white" font-size="11" font-weight="bold">Linux Kernel 掃描</text>
+        <rect x="100" y="240" width="160" height="30" rx="8" fill="#fff5f5" stroke="#e53e3e"/>
+        <text x="180" y="260" text-anchor="middle" fill="#c53030" font-size="12" font-weight="bold">🎯 30 CVE + 92 新 Bug</text>
+        <line x1="180" y1="225" x2="180" y2="238" stroke="#e53e3e" stroke-width="2" marker-end="url(#arrowhead)"/>
+      </svg>
+    </div>
+    <div>
+      <h3>IRIS：LLM 增強 CodeQL 漏洞檢測</h3>
+      <svg viewBox="0 0 360 280" style="width:100%;">
+        <rect x="20" y="20" width="140" height="40" rx="8" fill="#1a365d"/>
+        <text x="90" y="44" text-anchor="middle" fill="white" font-size="11" font-weight="bold">LLM 推斷 Taint 規格</text>
+        <rect x="200" y="20" width="140" height="40" rx="8" fill="#2b6cb0"/>
+        <text x="270" y="44" text-anchor="middle" fill="white" font-size="11" font-weight="bold">CodeQL 分析引擎</text>
+        <line x1="160" y1="40" x2="195" y2="40" stroke="#ed8936" stroke-width="2" marker-end="url(#arrowhead-orange)"/>
+        <line x1="90" y1="60" x2="90" y2="90" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="270" y1="60" x2="270" y2="90" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="20" y="95" width="140" height="35" rx="8" fill="#ed8936"/>
+        <text x="90" y="117" text-anchor="middle" fill="white" font-size="11" font-weight="600">上下文分析</text>
+        <rect x="200" y="95" width="140" height="35" rx="8" fill="#2b6cb0"/>
+        <text x="270" y="117" text-anchor="middle" fill="white" font-size="11" font-weight="600">全倉庫掃描</text>
+        <line x1="90" y1="130" x2="150" y2="160" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <line x1="270" y1="130" x2="210" y2="160" stroke="#2b6cb0" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <rect x="100" y="165" width="160" height="40" rx="8" fill="#38a169"/>
+        <text x="180" y="185" text-anchor="middle" fill="white" font-size="12" font-weight="bold">融合結果</text>
+        <text x="180" y="200" text-anchor="middle" fill="#c6f6d5" font-size="10">27→55/120 (+103%)</text>
+        <rect x="120" y="220" width="120" height="30" rx="8" fill="#fff5f5" stroke="#e53e3e"/>
+        <text x="180" y="240" text-anchor="middle" fill="#c53030" font-size="11" font-weight="bold">+4 未知漏洞</text>
+        <line x1="180" y1="205" x2="180" y2="218" stroke="#e53e3e" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+      </svg>
+      <div class="card green" style="margin-top:8px;padding:12px;">
+        <p style="font-size:0.9em;"><strong>SOSP'25 / S&P'25</strong> 頂會接收，證明學術價值和實用性。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 27: 騰訊工業實證 ===== -->
+<section class="slide">
+  <h2>🔐 騰訊工業級 LLM+SAST 實證</h2>
+  <div class="two-col">
+    <div>
+      <h3>首個工業級 LLM+SAST 研究</h3>
+      <div class="stat-grid" style="grid-template-columns:1fr 1fr;margin-bottom:20px;">
+        <div class="stat-box green"><div class="number" style="font-size:2.2em;">94-98%</div><div class="label">誤報消除率</div></div>
+        <div class="stat-box accent"><div class="number" style="font-size:1.6em;">$0.001</div><div class="label">最低成本/告警</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px;">
+        <h3 style="font-size:1em;">成本對比</h3>
+        <div class="bar-chart">
+          <div class="bar-item"><div class="bar-label" style="width:120px;">人工審查</div><div class="bar-track"><div class="bar-fill red" style="width:90%;">10-20 分鐘/條</div></div></div>
+          <div class="bar-item"><div class="bar-label" style="width:120px;">LLM 審查</div><div class="bar-track"><div class="bar-fill green" style="width:5%;">秒級</div></div></div>
+        </div>
+      </div>
+      <div class="card accent">
+        <p style="font-size:0.95em;">💰 每條告警 <strong>$0.001-0.12</strong>，相比人工審查節省<strong>數個數量級</strong></p>
+      </div>
+    </div>
+    <div>
+      <h3>SAST-Genius 誤報降低</h3>
+      <svg viewBox="0 0 360 200" style="width:100%;">
+        <rect x="20" y="30" width="140" height="80" rx="10" fill="#fff5f5" stroke="#e53e3e"/>
+        <text x="90" y="55" text-anchor="middle" fill="#c53030" font-size="12" font-weight="bold">純 Semgrep</text>
+        <text x="90" y="80" text-anchor="middle" fill="#c53030" font-size="28" font-weight="800">225</text>
+        <text x="90" y="100" text-anchor="middle" fill="#c53030" font-size="11">誤報告警</text>
+        <text x="190" y="78" text-anchor="middle" fill="#2b6cb0" font-size="30">→</text>
+        <rect x="220" y="30" width="130" height="80" rx="10" fill="#f0fff4" stroke="#38a169"/>
+        <text x="285" y="55" text-anchor="middle" fill="#276749" font-size="12" font-weight="bold">SAST-Genius</text>
+        <text x="285" y="80" text-anchor="middle" fill="#276749" font-size="28" font-weight="800">20</text>
+        <text x="285" y="100" text-anchor="middle" fill="#276749" font-size="11">誤報告警</text>
+        <rect x="130" y="140" width="120" height="40" rx="8" fill="#38a169"/>
+        <text x="190" y="165" text-anchor="middle" fill="white" font-size="14" font-weight="bold">降低 91%</text>
+      </svg>
+      <h3 style="margin-top:12px;">BugLens 精確度提升</h3>
+      <div class="bar-chart">
+        <div class="bar-item"><div class="bar-label" style="width:80px;">前</div><div class="bar-track"><div class="bar-fill red" style="width:10%;">0.10</div></div></div>
+        <div class="bar-item"><div class="bar-label" style="width:80px;">後</div><div class="bar-track"><div class="bar-fill green" style="width:72%;">0.72 (7倍)</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 28: 安全漏洞修補 Section ===== -->
+<section class="slide section-title">
+  <div style="font-size:5em;margin-bottom:20px;">🛡️</div>
+  <h1>自動化安全漏洞修補</h1>
+  <div class="subtitle">10 篇論文 | 高風險高價值應用場景</div>
+</section>
+
+<!-- ===== SLIDE 29: 安全漏洞概覽 ===== -->
+<section class="slide">
+  <h2>🛡️ 自動化安全漏洞修補 — 概覽</h2>
+  <div class="two-col">
+    <div>
+      <h3>核心方案與效能</h3>
+      <div class="bar-chart">
+        <div class="bar-item"><div class="bar-label">PatchIsland 內部</div><div class="bar-track"><div class="bar-fill green" style="width:91.3%;">91.3%</div></div></div>
+        <div class="bar-item"><div class="bar-label">RvB 防禦率</div><div class="bar-track"><div class="bar-fill green" style="width:90%;">90%</div></div></div>
+        <div class="bar-item"><div class="bar-label">VulnResolver</div><div class="bar-track"><div class="bar-fill blue" style="width:75%;">75%</div></div></div>
+        <div class="bar-item"><div class="bar-label">PatchIsland AIxCC</div><div class="bar-track"><div class="bar-fill blue" style="width:72.1%;">72.1%</div></div></div>
+        <div class="bar-item"><div class="bar-label" style="color:#e53e3e;">VulnRepairEval</div><div class="bar-track"><div class="bar-fill red" style="width:21.7%;">僅 21.7%</div></div></div>
+      </div>
+      <div class="card red" style="margin-top:16px;">
+        <h3 style="font-size:1em;">⚠️ 殘酷現實</h3>
+        <p style="font-size:0.9em;">VulnRepairEval exploit-based 嚴格評估：<strong>最佳模型僅修復 5/23（21.7%）</strong>。增強提示和多代理改進有限。</p>
+      </div>
+    </div>
+    <div>
+      <h3>10 大技術方案</h3>
+      <table style="font-size:0.85em;">
+        <tr><th>技術</th><th>特色</th></tr>
+        <tr><td>PatchIsland</td><td>多 LLM 集成 + 兩階段去重</td></tr>
+        <tr><td>VulnResolver</td><td>CPCAgent + SPAAgent 混合</td></tr>
+        <tr><td>Well Begun</td><td>位置感知 + taint 覆蓋率</td></tr>
+        <tr><td>Vul-R2</td><td>推理 LLM + RL 自適應</td></tr>
+        <tr><td>PATCHEVAL</td><td>1000 漏洞多語言基準</td></tr>
+        <tr><td>VulnRepairEval</td><td>Exploit-based 嚴格評估</td></tr>
+        <tr><td>SecureFixAgent</td><td>Bandit + 輕量 LLM (&lt;8B)</td></tr>
+        <tr><td>RvB</td><td>紅藍對抗加固框架</td></tr>
+        <tr><td>Red Teaming APR</td><td>SWExploit 對抗攻擊</td></tr>
+        <tr><td>One-Shot Patching</td><td>多 LLM 互補評估</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SLIDE 30: 漏洞修補詳解 ===== -->
+<section class="slide">
+  <h2>🛡️ 漏洞修補詳解：PatchIsland 與 Exploit-based 評估</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>PatchIsland 多 LLM 集成策略</h3>
+      <p>PatchIsland 在 DARPA AIxCC 競賽中表現出色（72.1%，31/43 漏洞），其核心策略是<strong>多模型集成</strong>：</p>
+      <ul>
+        <li><strong>多樣 LLM 代理</strong>：同時部署多個不同的 LLM（如 GPT-4、Claude、Gemini），每個獨立嘗試修復同一個漏洞。不同模型有不同的「思考方式」，互補性強</li>
+        <li><strong>兩階段補丁去重</strong>：第一階段按語意相似度聚類候選補丁，第二階段在每個聚類中選擇最佳代表。避免提交大量雷同的無效補丁</li>
+        <li><strong>持續模糊測試驅動</strong>：整合了 fuzzing 作為驅動力，新發現的 crash 會觸發修復嘗試</li>
+      </ul>
+      <div class="card green" style="margin-top:12px;padding:14px;">
+        <p style="font-size:0.9em;">內部評估達 <strong>91.3%</strong>，說明在受控環境下多模型集成策略非常有效。</p>
+      </div>
+    </div>
+    <div class="detail-text">
+      <h3>為什麼 Exploit-based 評估重要？</h3>
+      <p>傳統評估方法用測試套件判斷補丁正確性，但 VulnRepairEval 揭示了嚴重問題：</p>
+      <ul>
+        <li><strong>測試通過 ≠ 安全修復</strong>：補丁可能讓測試通過但未真正修復漏洞的根因。例如只加了 try-catch 但沒有修復 buffer overflow</li>
+        <li><strong>Exploit-based 評估</strong>：用真實的 PoC exploit 驗證補丁是否真的阻止了攻擊。這是最嚴格的評估標準</li>
+        <li><strong>殘酷結果</strong>：在 23 個 Python CVE 上，最佳模型僅成功修復 5 個（21.7%），遠低於測試套件評估的數字</li>
+      </ul>
+      <h3 style="margin-top:16px;">SWExploit 對抗攻擊警示</h3>
+      <p>Red Teaming APR 研究發現：攻擊者可以構造對抗性 Bug 報告，操縱 APR 系統生成<strong>含有漏洞的補丁</strong>。攻擊成功率達 <strong>0.91</strong>，90% 的對抗性報告可觸發攻擊者期望的結果。最佳前置過濾器僅擋住 47%。</p>
+      <div class="warning-box">
+        <p style="font-size:0.9em;"><strong>⚠️ 安全啟示</strong>：自動修復的補丁在部署前必須經過安全審查。不能盲目信任 APR 系統的輸出。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== EXTRA SLIDES (28 pages) ===== -->
+
+<!-- Page A: SWE-bench Verified 排行榜 -->
+<section class="slide">
+  <h2>🏆 SWE-bench Verified 排行榜</h2>
+  <div class="detail-text">
+    <h3>各系統解決率一覽（CSS 條形圖）</h3>
+    <div style="display:flex;flex-direction:column;gap:12px;margin:20px 0;">
+      <div><strong>Kimi-Dev</strong> <span style="color:#888">60.4%</span>
+        <div style="background:#2563eb;height:28px;width:60.4%;border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:bold;">60.4%</div></div>
+      <div><strong>CAT (SWE-Compressor)</strong> <span style="color:#888">57.6%</span>
+        <div style="background:#3b82f6;height:28px;width:57.6%;border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:bold;">57.6%</div></div>
+      <div><strong>daVinci-Dev 72B</strong> <span style="color:#888">58.5%</span>
+        <div style="background:#6366f1;height:28px;width:58.5%;border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:bold;">58.5%</div></div>
+      <div><strong>daVinci-Dev 32B</strong> <span style="color:#888">56.1%</span>
+        <div style="background:#8b5cf6;height:28px;width:56.1%;border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:bold;">56.1%</div></div>
+      <div><strong>REFINE + AutoCodeRover</strong> <span style="color:#888">51.67%</span>
+        <div style="background:#a78bfa;height:28px;width:51.67%;border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:bold;">51.67%</div></div>
+      <div><strong>Agentless</strong> <span style="color:#888">32%</span>
+        <div style="background:#f59e0b;height:28px;width:32%;border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:bold;">32%</div></div>
+      <div><strong>SWE-agent</strong> <span style="color:#888">12.5%</span>
+        <div style="background:#ef4444;height:28px;width:12.5%;border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:bold;">12.5%</div></div>
+      <div><strong>SWE-Bench+ 真實率</strong> <span style="color:#888">3.97%</span>
+        <div style="background:#dc2626;height:28px;width:8%;border-radius:6px;display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:bold;">3.97%</div></div>
+    </div>
+    <div class="warning-box">
+      ⚠️ SWE-Bench+ 過濾 solution leakage（32.67%）和 weak tests（31.08%）後，真實解決率僅 <strong>3.97%</strong>。BOAD 36B 在 SWE-bench-Live 排名第二，超越 GPT-4 與 Claude。94%+ issues 位於 LLM knowledge cutoff 之前，基準數字可能被嚴重高估。
+    </div>
+  </div>
+</section>
+
+<!-- Page B: 各方法成本對比 -->
+<section class="slide">
+  <h2>💰 各方法成本對比</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>每個 Issue 的修復成本</h3>
+      <table>
+        <thead><tr><th>方法類型</th><th>成本/Issue</th><th>解決率</th><th>代表系統</th></tr></thead>
+        <tbody>
+          <tr><td>Agentless Pipeline</td><td><strong>$0.70</strong></td><td>~32%</td><td>Agentless</td></tr>
+          <tr><td>簡單 Agent</td><td>$2–5</td><td>~40-50%</td><td>SWE-agent</td></tr>
+          <tr><td>複雜 Multi-Agent</td><td>$5–50</td><td>~55-60%</td><td>HyperAgent, BOAD</td></tr>
+          <tr><td>人工修復</td><td>$100–500</td><td>~95%+</td><td>資深工程師</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="detail-text">
+      <h3>成本效益分析</h3>
+      <div class="card green">
+        <h3>🟢 最佳 CP 值：Agentless</h3>
+        <p>$0.70/issue，每 3 個 Bug 自動修 1 個。快速上線、驗證業務價值的首選。</p>
+      </div>
+      <div class="card blue">
+        <h3>🔵 最佳平衡：混合架構</h3>
+        <p>80% 簡單問題走 Fast Path（$0.70），20% 複雜問題升級 Agent（$5-50）。平均成本 ~$2-3/issue，解決率可達 50%+。</p>
+      </div>
+      <div class="card orange">
+        <h3>🟠 Token 節省加持</h3>
+        <p>SWE-Pruner 節省 23-54% token，FuseSearch 加速 93.6%——成本還能再降。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page C: Multi-agent 方法詳解 -->
+<section class="slide">
+  <h2>🤖 Multi-Agent 方法詳解</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>三大代表系統架構比較</h3>
+      <table>
+        <thead><tr><th>特性</th><th>SWE-agent</th><th>HyperAgent</th><th>BOAD</th></tr></thead>
+        <tbody>
+          <tr><td>架構</td><td>單 Agent + ACI</td><td>4 Agent 協作</td><td>階層式 MAB 自動發現</td></tr>
+          <tr><td>核心創新</td><td>Agent-Computer Interface</td><td>Planner/Navigator/Editor/Executor</td><td>多臂老虎機選子代理</td></tr>
+          <tr><td>解決率</td><td>12.5%</td><td>Multi-benchmark SOTA</td><td>SWE-bench-Live 第二</td></tr>
+          <tr><td>模型大小</td><td>閉源 API</td><td>閉源 API</td><td>36B 開源</td></tr>
+          <tr><td>優勢</td><td>簡潔、可擴展</td><td>完整 SE 生命週期</td><td>開源超越閉源</td></tr>
+          <tr><td>劣勢</td><td>早期、解決率低</td><td>複雜度高、成本高</td><td>需要 MAB 訓練</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="detail-text">
+      <h3>HyperAgent 四代理分工</h3>
+      <svg viewBox="0 0 300 240" style="width:100%;max-width:300px;">
+        <rect x="90" y="5" width="120" height="35" rx="8" fill="#2563eb"/><text x="150" y="28" text-anchor="middle" fill="#fff" font-size="12">Planner</text>
+        <rect x="10" y="80" width="120" height="35" rx="8" fill="#3b82f6"/><text x="70" y="103" text-anchor="middle" fill="#fff" font-size="12">Navigator</text>
+        <rect x="170" y="80" width="120" height="35" rx="8" fill="#6366f1"/><text x="230" y="103" text-anchor="middle" fill="#fff" font-size="12">Editor</text>
+        <rect x="90" y="155" width="120" height="35" rx="8" fill="#8b5cf6"/><text x="150" y="178" text-anchor="middle" fill="#fff" font-size="12">Executor</text>
+        <line x1="150" y1="40" x2="70" y2="80" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+        <line x1="150" y1="40" x2="230" y2="80" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="70" y1="115" x2="150" y2="155" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="230" y1="115" x2="150" y2="155" stroke="#94a3b8" stroke-width="2"/>
+        <text x="150" y="220" text-anchor="middle" fill="#64748b" font-size="10">規劃 → 探索+編輯 → 執行驗證</text>
+      </svg>
+      <p><strong>BOAD 的突破</strong>：用 Multi-Armed Bandit 框架自動發現最佳子代理組合。36B 開源模型在 SWE-bench-Live 排名第二，超越 GPT-4 和 Claude，證明架構設計比模型大小更重要。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page D: Agentless 方法詳解 -->
+<section class="slide">
+  <h2>🔧 Agentless 三階段流水線詳解</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>階段 1：故障定位</h3>
+      <p>輸入 Issue 描述與錯誤訊息，LLM 生成結構化 Bug 解釋。按 <strong>Repo → File → Function → Line</strong> 逐步縮小範圍。採用 RGFL 分層推理，檔案級 Hit@1 達 85%。</p>
+      <h3>階段 2：修復生成</h3>
+      <p>在定位結果基礎上，LLM 生成 <strong>5-10 個候選補丁</strong>（sampling with temperature）。每個候選補丁獨立生成，利用不同 prompt 策略增加多樣性。成本僅 $0.70/issue。</p>
+      <h3>階段 3：測試驗證與排序</h3>
+      <p>所有候選補丁在 Docker 沙盒中執行測試套件。通過測試的補丁按置信度排序，選擇最佳方案。SWT-Bench 方法可讓精確度翻倍。</p>
+    </div>
+    <div class="detail-text">
+      <h3>為什麼 Agentless 仍然重要？</h3>
+      <div class="card green">
+        <h3>✅ 優點</h3>
+        <p>• 極低成本（$0.70/issue）<br>• 簡單可解釋的流水線<br>• 無需複雜 Agent 框架<br>• 適合 80% 的簡單 Bug<br>• Kimi-Dev 證明可與 Agent 互補</p>
+      </div>
+      <div class="card red">
+        <h3>❌ 限制</h3>
+        <p>• 32% 解決率（僅處理簡單問題）<br>• 無法處理跨檔案複雜 Bug<br>• 無迭代探索能力<br>• 缺乏上下文動態調整</p>
+      </div>
+      <p><strong>Kimi-Dev 的洞見</strong>：用 Agentless Pipeline 生成訓練資料，訓練出的「技能先驗」再注入 Agent 系統，解決率從 32% 飆升至 <strong>60.4%</strong>。兩者互補，不是二選一。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page E: RL/訓練方法詳解 -->
+<section class="slide">
+  <h2>🧪 RL / 訓練方法詳解</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>三大訓練策略對比</h3>
+      <table>
+        <thead><tr><th>方法</th><th>訓練策略</th><th>效果</th></tr></thead>
+        <tbody>
+          <tr><td><strong>SWE-RL</strong></td><td>Self-play 強化學習：模型自我對弈產生訓練資料，GRPO/PPO 優化</td><td>SWE-bench Verified +10.4 分</td></tr>
+          <tr><td><strong>REFINE</strong></td><td>補丁精煉：識別「近似正確」補丁，用上下文感知修正 prompt 迭代</td><td>SWE-bench Lite 51.67%（+14.67%）</td></tr>
+          <tr><td><strong>Kimi-Dev</strong></td><td>Agentless 訓練→Agent 技能先驗：pipeline 輸出當 RL 訓練資料</td><td>SWE-bench Verified 60.4% SOTA</td></tr>
+        </tbody>
+      </table>
+      <h3>daVinci-Dev：Agent 原生訓練</h3>
+      <p>不同於 Kimi-Dev 的「Pipeline→Agent」路線，daVinci-Dev 直接用 <strong>Agent 原生軌跡資料</strong>做中期訓練（mid-training）。上下文原生 + 環境原生資料讓 32B 模型達 56.1%，72B 達 58.5%。</p>
+    </div>
+    <div class="detail-text">
+      <h3>訓練資料的挑戰</h3>
+      <div class="card orange">
+        <h3>⚠️ 資料稀缺問題</h3>
+        <p>高品質的 bug-fix pair 稀缺。SWE-Synth 透過合成方式產生可驗證的訓練資料。SWE-Bench+ 揭示 94%+ issues 在 LLM knowledge cutoff 之前——模型可能在「背答案」而非「學解題」。</p>
+      </div>
+      <div class="card blue">
+        <h3>💡 MCTS-Refined-CoT</h3>
+        <p>Monte Carlo Tree Search 精煉 Chain-of-Thought 推理路徑。用樹搜索找到最佳推理軌跡，再用來 fine-tune 開源模型。讓小模型也能達到大模型水準。</p>
+      </div>
+      <p><strong>核心洞見</strong>：「Thinking Longer, Not Larger」——test-time compute scaling 讓小模型表現≈大模型。投資推理時間比投資模型大小更划算。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page F: SWE-Pruner Token 壓縮詳解 -->
+<section class="slide">
+  <h2>✂️ SWE-Pruner Token 壓縮詳解</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>工作原理</h3>
+      <p><strong>SWE-Pruner</strong> 是一個僅 <strong>0.6B 參數</strong>的輕量級神經略讀器（Neural Skimmer）。它的工作方式類似人類工程師快速瀏覽程式碼——逐檔案掃描，動態選擇與任務最相關的程式碼行，丟棄無關內容。</p>
+      <h3>壓縮流程</h3>
+      <p>1️⃣ <strong>輸入</strong>：Bug 描述 + 候選檔案的完整程式碼<br>
+      2️⃣ <strong>略讀</strong>：0.6B 模型逐行評估相關性分數<br>
+      3️⃣ <strong>裁剪</strong>：保留高相關性行，移除低相關性行<br>
+      4️⃣ <strong>輸出</strong>：壓縮後的上下文（僅 46-77% 原始 token）</p>
+      <h3>壓縮效果</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">
+        <div><strong>最佳壓縮</strong>
+          <div style="background:#22c55e;height:22px;width:54%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#fff;font-size:13px;">54% token 節省</div></div>
+        <div><strong>最小壓縮</strong>
+          <div style="background:#86efac;height:22px;width:23%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#000;font-size:13px;">23% token 節省</div></div>
+      </div>
+    </div>
+    <div class="detail-text">
+      <h3>為什麼有效？</h3>
+      <div class="card blue">
+        <h3>🧠 注意力稀釋效應</h3>
+        <p>Transformer 的 softmax attention 在 token 數增加時權重下降。更多上下文 ≠ 更好結果。SWE-Pruner 移除「噪音」後，LLM 可以更專注於關鍵程式碼。</p>
+      </div>
+      <div class="card green">
+        <h3>📊 效能幾乎不受影響</h3>
+        <p>在 SWE-bench Verified 上測試，壓縮 23-54% token 後，端到端修復率變化極小。這證明大部分被載入的程式碼對修復任務毫無貢獻。</p>
+      </div>
+      <div class="card orange">
+        <h3>⚡ 部署優勢</h3>
+        <p>• 模型僅 0.6B，可離線部署<br>• 推理速度極快（毫秒級）<br>• 可與任何 LLM 組合使用<br>• 直接降低 API 費用 23-54%</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page G: RLCE 160% 提升機制 -->
+<section class="slide">
+  <h2>📈 RLCE 160% 修復能力提升機制</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>問題背景</h3>
+      <p>GPT-3.5 在倉庫級任務（RepoBugs）上無策略的修復率僅 <strong>22.58%</strong>——從函數級 ~50%+ 大幅下降。根本原因：<strong>缺乏正確的上下文</strong>。</p>
+      <h3>RLCE 多策略提取機制</h3>
+      <p>RLCE（Reinforcement Learning for Context Extraction）用 RL 訓練模型學會選擇最佳上下文提取策略：</p>
+      <p>📌 <strong>Import Graph 策略</strong>：沿 import/include 依賴鏈向外擴展<br>
+      📌 <strong>Call Graph 策略</strong>：追蹤函數呼叫上下游關係<br>
+      📌 <strong>Type Hierarchy 策略</strong>：沿型別繼承鏈提取相關定義<br>
+      📌 <strong>混合策略</strong>：RL Agent 根據 Bug 特徵動態選擇最佳組合</p>
+    </div>
+    <div class="detail-text">
+      <h3>160% 提升怎麼來的？</h3>
+      <p>基線（無策略 GPT-3.5）修復率 22.58%。最佳 RLCE 策略修復率提升至約 <strong>58.7%</strong>——相對提升 160%。</p>
+      <div class="card green">
+        <h3>🎯 核心洞見</h3>
+        <p>倉庫級任務的主要瓶頸不是 LLM 的修復能力，而是<strong>能否提供正確的上下文</strong>。給對上下文，修復能力可以翻倍以上。</p>
+      </div>
+      <h3>與其他方法的協同</h3>
+      <table>
+        <thead><tr><th>方法</th><th>角色</th><th>效果</th></tr></thead>
+        <tbody>
+          <tr><td>RLCE</td><td>選擇上下文策略</td><td>+160% 修復率</td></tr>
+          <tr><td>SWE-Pruner</td><td>壓縮已選上下文</td><td>節省 23-54% token</td></tr>
+          <tr><td>CAT</td><td>動態工具化管理</td><td>57.6% SWE-bench</td></tr>
+        </tbody>
+      </table>
+      <p>三者可堆疊：RLCE 選出正確上下文 → SWE-Pruner 壓縮噪音 → CAT 在 Agent 互動中動態調整。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page H: 32% 答案泄漏怎麼發現的 -->
+<section class="slide">
+  <h2>🔍 SWE-Bench+ 答案泄漏：怎麼發現的？</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>發現方法論</h3>
+      <p>SWE-Bench+ 研究團隊對 SWE-bench 原始資料集進行了系統性品質審計，發現兩大類問題：</p>
+      <h3>1️⃣ Solution Leakage（32.67%）</h3>
+      <p>Issue 描述、PR 討論、commit message 中直接或間接包含了修復方案。LLM 不需要「理解」Bug——只需要從上下文中「提取」答案。</p>
+      <p>具體洩漏來源：<br>
+      • Issue 討論中已有人貼出修復代碼<br>
+      • PR description 包含具體修改建議<br>
+      • Commit message 暗示修改位置和方式<br>
+      • 相關 Issue 的交叉引用包含解法</p>
+      <h3>2️⃣ Weak Test Cases（31.08%）</h3>
+      <p>測試案例過於寬鬆，錯誤的補丁也能通過。這讓「表面正確但語義錯誤」的修復被計為成功。</p>
+    </div>
+    <div class="detail-text">
+      <h3>影響有多大？</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">
+        <div><strong>原始 SWE-bench 解決率</strong>
+          <div style="background:#3b82f6;height:24px;width:50%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#fff;font-size:13px;">12.47%</div></div>
+        <div><strong>過濾後真實率</strong>
+          <div style="background:#ef4444;height:24px;width:16%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#fff;font-size:13px;">3.97%</div></div>
+      </div>
+      <div class="warning-box">
+        <strong>⚠️ 真實解決率僅 3.97%</strong>——業界宣稱的表現被高估了 3 倍以上！94%+ 的 issues 在 LLM knowledge cutoff 之前，模型可能直接從訓練資料中「回憶」答案。
+      </div>
+      <div class="card red">
+        <h3>🚨 對研究社群的警示</h3>
+        <p>任何聲稱在 SWE-bench 上取得高分的系統，都必須在 SWE-Bench+ 或 SWE-Bench++ 上重新驗證。未經過濾的數字不可信。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page I: 從 SWE-bench 到 SWE-bench++ 的演進 -->
+<section class="slide">
+  <h2>📊 評估基準演進：SWE-bench → SWE-bench++ </h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>三代基準比較</h3>
+      <table>
+        <thead><tr><th>基準</th><th>年份</th><th>規模</th><th>改進</th></tr></thead>
+        <tbody>
+          <tr><td><strong>SWE-bench</strong></td><td>2023</td><td>2,294 issues / 12 repos</td><td>開創性基準</td></tr>
+          <tr><td><strong>SWE-Bench+</strong></td><td>2024</td><td>同上（品質審計）</td><td>過濾泄漏+弱測試</td></tr>
+          <tr><td><strong>SWE-Bench++</strong></td><td>2025</td><td>3,971 repos / 11 語言</td><td>可擴展+多語言</td></tr>
+        </tbody>
+      </table>
+      <h3>其他重要評估框架</h3>
+      <p>• <strong>Breakpoint</strong>：系統級推理，SOTA 最難任務成功率 0%<br>
+      • <strong>RepoDebug</strong>：8 語言、22 錯誤類型的多任務除錯<br>
+      • <strong>FAUN-Eval</strong>：細粒度子任務評估（QA/定位/編輯）<br>
+      • <strong>RepoGenesis</strong>：端對端微服務生成，最佳僅 23.67%</p>
+    </div>
+    <div class="detail-text">
+      <h3>對業界的影響</h3>
+      <div class="card blue">
+        <h3>📐 評估方法論升級</h3>
+        <p>SWE-Bench+ 推動了「評估基準也需要被評估」的觀念。現在任何新基準都需要考慮：資料泄漏、測試品質、時間截斷點。</p>
+      </div>
+      <div class="card green">
+        <h3>🌍 多語言擴展需求</h3>
+        <p>SWE-Bench++ 擴展至 11 種語言是重要一步。Claude-sonnet-4.5 在 SWE-bench++ 上 pass@10 僅 36.20%，顯示多語言倉庫級任務仍極具挑戰。</p>
+      </div>
+      <div class="card orange">
+        <h3>🎯 Breakpoint 的啟示</h3>
+        <p>涉及高呼叫圖中心性的系統級推理任務，SOTA 模型成功率 <strong>0%</strong>。真正的「理解程式碼」能力還遠未實現，定位跨檔案因果關係仍是根本挑戰。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page J: KNighter 詳解 -->
+<section class="slide">
+  <h2>🛡️ KNighter：從歷史 Bug 合成靜態分析 Checker</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>核心思路</h3>
+      <p>KNighter 讓 LLM 自動從歷史 bug 模式中合成靜態分析 checker（檢查規則）。傳統做法是人工編寫 Checker——費時、依賴專家知識、難以覆蓋長尾 bug 模式。</p>
+      <h3>多階段合成流程</h3>
+      <p>1️⃣ <strong>Bug 模式挖掘</strong>：從 Linux kernel commit 歷史中提取 bug-fix pair<br>
+      2️⃣ <strong>模式抽象</strong>：LLM 將具體 bug 抽象為通用模式描述<br>
+      3️⃣ <strong>Checker 生成</strong>：LLM 根據模式描述合成靜態分析規則<br>
+      4️⃣ <strong>自動迭代精煉</strong>：在已知 codebase 上測試 → 分析誤報 → 精煉規則<br>
+      5️⃣ <strong>部署驗證</strong>：在完整 Linux kernel 上運行合成的 checker</p>
+    </div>
+    <div class="detail-text">
+      <h3>驚人成果</h3>
+      <div class="card red">
+        <h3>🔥 30 個 CVE + 92 個新 Bug</h3>
+        <p>在 Linux kernel 中發現 <strong>30 個 CVE</strong>（已確認的安全漏洞）和 92 個此前未知的 bug。這些是人工編寫的 checker 沒有覆蓋到的長尾模式。</p>
+      </div>
+      <div class="card green">
+        <h3>✅ SOSP 2025 頂會發表</h3>
+        <p>這是系統領域最頂級的會議之一，代表學術界對此方法的高度認可。KNighter 證明 LLM 合成的 checker 可以超越人工編寫的規則。</p>
+      </div>
+      <h3>對我們的啟示</h3>
+      <p>每個大型專案都有獨特的 bug 模式。用 KNighter 思路，可以從專案自身的 commit 歷史中自動學習並生成專案特定的靜態分析規則——<strong>持續進化的安全防線</strong>。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page K: IRIS + QLCoder -->
+<section class="slide">
+  <h2>🔬 IRIS + QLCoder：CodeQL 增強方案</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>IRIS：LLM 推斷 Taint 規格</h3>
+      <p>CodeQL 的漏洞檢測依賴 taint specification（污點規格），定義哪些函數是 source（資料來源）、哪些是 sink（危險操作）。人工維護這些規格成本極高。</p>
+      <p><strong>IRIS 的做法</strong>：<br>
+      1️⃣ LLM（GPT-4）自動推斷未知函數的 taint 行為<br>
+      2️⃣ 結合上下文分析，判斷函數是 source、sink 還是 sanitizer<br>
+      3️⃣ 將推斷結果注入 CodeQL，增強全倉庫檢測能力</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:10px 0;">
+        <div><strong>原始 CodeQL</strong>
+          <div style="background:#94a3b8;height:22px;width:22.5%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#fff;font-size:13px;">27/120</div></div>
+        <div><strong>IRIS + CodeQL</strong>
+          <div style="background:#22c55e;height:22px;width:45.8%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#fff;font-size:13px;">55/120 (+103%)</div></div>
+      </div>
+    </div>
+    <div class="detail-text">
+      <h3>QLCoder：自動合成 CodeQL 查詢</h3>
+      <p>QLCoder 從 CVE 元數據自動合成 CodeQL 查詢語句，整合 MCP + LSP + RAG 三大能力：</p>
+      <p>• <strong>MCP</strong>：管理多步合成上下文<br>
+      • <strong>LSP</strong>：即時語法檢查與型別推斷<br>
+      • <strong>RAG</strong>：從歷史 CodeQL 查詢中檢索相似案例</p>
+      <div class="card blue">
+        <h3>📊 5.3× 改進</h3>
+        <p>QLCoder 合成 CodeQL 查詢的成功率達 <strong>53.4%</strong>，而純 Claude Code 僅 10%。在 176 個 CVE、111 個 Java 專案上驗證。</p>
+      </div>
+      <h3>IRIS + QLCoder 組合效果</h3>
+      <p>IRIS 增強 taint 規格 → QLCoder 生成查詢語句 → 另外還有 <strong>AdaTaint</strong> 用自適應 source/sink 推斷進一步降低 43.7% 誤報。三者形成完整的 CodeQL 增強工具鏈。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page L: 騰訊工業部署 -->
+<section class="slide">
+  <h2>🏭 騰訊工業部署：94-98% 誤報降低</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>問題背景</h3>
+      <p>靜態分析工具（SAST）在企業環境中的最大痛點是<strong>誤報率極高</strong>。工程師花費大量時間審查告警，結果 90%+ 都是誤報——嚴重打擊使用意願。</p>
+      <p>人工審查一條告警需要 <strong>10-20 分鐘</strong>。大型專案每天數千條告警，根本看不完。</p>
+      <h3>騰訊的做法</h3>
+      <p>1️⃣ 將 SAST 告警（含上下文程式碼）送入 LLM<br>
+      2️⃣ LLM 判斷告警是否為真實漏洞<br>
+      3️⃣ 過濾掉高置信度的誤報，僅保留需人工確認的告警<br>
+      4️⃣ 在企業內部 SAT（Static Analysis Tool）上全面部署</p>
+    </div>
+    <div class="detail-text">
+      <h3>成果數據</h3>
+      <div class="card green">
+        <h3>📉 誤報降低 94-98%</h3>
+        <p>工業環境首次全面實證。從數千條告警中精確過濾，留下真正需要關注的漏洞。工程師審查效率提升數個數量級。</p>
+      </div>
+      <div class="card blue">
+        <h3>💵 成本：$0.001-0.12 / 告警</h3>
+        <p>每條告警的 LLM 分析成本極低。對比人工 10-20 分鐘/條（約 $5-15），節省 <strong>99%+</strong> 的審查成本。</p>
+      </div>
+      <h3>對比其他工具</h3>
+      <table>
+        <thead><tr><th>工具</th><th>誤報降低</th><th>場景</th></tr></thead>
+        <tbody>
+          <tr><td>騰訊 LLM+SAT</td><td>94-98%</td><td>企業內部</td></tr>
+          <tr><td>SAST-Genius</td><td>~91%</td><td>Semgrep 增強</td></tr>
+          <tr><td>BugLens</td><td>精確度 7×</td><td>Linux kernel</td></tr>
+          <tr><td>AdaTaint</td><td>43.7%</td><td>Taint 分析</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Page M: GradleFixer Tool Bridging -->
+<section class="slide">
+  <h2>🔨 GradleFixer：Tool Bridging 策略</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>為什麼領域特定工具比通用 Shell 好？</h3>
+      <p>傳統 Agent（如 SWE-agent）使用通用 shell 命令與程式碼互動：<code>grep</code>、<code>cat</code>、<code>sed</code>。但在 CI/CD 構建修復場景，這遠遠不夠。</p>
+      <h3>Tool Bridging 概念</h3>
+      <p>GradleFixer 引入 <strong>Tool Bridging</strong>——用領域感知的抽象工具替代通用命令：</p>
+      <p>❌ <code>grep -r "compile" build.gradle</code><br>
+      ✅ <code>analyzeDependencyTree()</code></p>
+      <p>❌ <code>sed -i 's/old/new/' build.gradle</code><br>
+      ✅ <code>updateDependencyVersion("lib", "2.0")</code></p>
+      <p>領域工具知道 Gradle 的語義——依賴解析、版本衝突、傳遞依賴——而通用 shell 只看到文字。</p>
+    </div>
+    <div class="detail-text">
+      <h3>效果對比</h3>
+      <div class="card green">
+        <h3>✅ GradleFixer: 81.4% pass@1</h3>
+        <p>在 AndroidBuildBench（1,019 個構建失敗案例）上，GradleFixer 的首次修復成功率達 81.4%，顯著優於 SOTA 程式碼代理。</p>
+      </div>
+      <h3>其他 CI/CD 修復工具</h3>
+      <table>
+        <thead><tr><th>工具</th><th>場景</th><th>成功率</th></tr></thead>
+        <tbody>
+          <tr><td>GradleFixer</td><td>Android 構建</td><td>81.4%</td></tr>
+          <tr><td>Build-bench Ext.</td><td>跨 ISA 構建</td><td>63%</td></tr>
+          <tr><td>CI/CD Translation</td><td>Travis→GitHub Actions</td><td>75.5%</td></tr>
+          <tr><td>Android Diagnosis</td><td>Android 構建</td><td>75.56%</td></tr>
+        </tbody>
+      </table>
+      <div class="card orange">
+        <h3>💡 啟示</h3>
+        <p>通用 Agent 不是萬能的。針對特定領域（構建系統、CI/CD、IaC），設計領域感知的工具介面，效果遠勝通用 shell 命令。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page N: IaCGen 迭代反饋 -->
+<section class="slide">
+  <h2>🔄 IaCGen：迭代反饋的力量</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>首次嘗試 vs 迭代後</h3>
+      <p>IaCGen 研究了 LLM 生成基礎設施即代碼（Infrastructure as Code）的部署成功率。結果揭示了<strong>迭代反饋</strong>的巨大價值：</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin:15px 0;">
+        <div><strong>首次部署成功率</strong>
+          <div style="background:#ef4444;height:24px;width:30%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#fff;font-size:13px;">20.8-30.2%</div></div>
+        <div><strong>10 次迭代後</strong>
+          <div style="background:#22c55e;height:24px;width:91.6%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#fff;font-size:13px;">54.6-91.6%</div></div>
+      </div>
+      <h3>三層迭代反饋</h3>
+      <p>1️⃣ <strong>格式驗證</strong>：YAML/JSON 語法檢查，修正格式錯誤<br>
+      2️⃣ <strong>語法驗證</strong>：Terraform/Ansible 語法檢查，修正配置錯誤<br>
+      3️⃣ <strong>部署驗證</strong>：實際部署測試，根據錯誤訊息修正</p>
+    </div>
+    <div class="detail-text">
+      <h3>MACOG 多代理架構</h3>
+      <p>MACOG 用四個專門 Agent 協作生成 Terraform 配置：</p>
+      <p>🏗️ <strong>Architect</strong>：設計整體架構<br>
+      ⚙️ <strong>Engineer</strong>：撰寫具體配置<br>
+      🔍 <strong>Reviewer</strong>：審查配置品質<br>
+      🔒 <strong>Security</strong>：安全性檢查</p>
+      <div class="card blue">
+        <h3>📊 MACOG (GPT-5): 74.02 分</h3>
+        <p>配置品質分數顯著優於 RAG 基線的 54.90 分。多代理協作 + 專門分工比單一模型效果好得多。</p>
+      </div>
+      <div class="card green">
+        <h3>💡 核心洞見</h3>
+        <p>LLM 的首次輸出往往不可靠（僅 20-30%），但配合<strong>自動化反饋迴圈</strong>，10 次迭代可將成功率提升至 90%+。FSE'26 頂會接收。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page O: 難點 1 — 跨文件因果推理 -->
+<section class="slide">
+  <h2>🔴 難點 1：跨檔案因果推理</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>問題描述</h3>
+      <p>倉庫級 Bug 的根因（root cause）與症狀（symptom）往往分散在不同檔案中。LLM 需要追蹤跨多個檔案的因果鏈才能正確定位。</p>
+      <h3>Breakpoint 的殘酷結論</h3>
+      <div class="card red">
+        <h3>🚫 SOTA 最難任務成功率：0%</h3>
+        <p>涉及高呼叫圖中心性（system-level reasoning）的任務，所有頂級模型——GPT-4、Claude、Gemini——全部失敗。沒有一個模型能正確推理跨多檔案的因果鏈。</p>
+      </div>
+      <h3>根本原因分析</h3>
+      <p>1️⃣ LLM 在超過 3-4 步的推理鏈上準確度急劇下降<br>
+      2️⃣ 程式碼的隱式依賴（runtime behavior、configuration）難以從文本推斷<br>
+      3️⃣ LLM 訓練資料以單文件為主，跨文件推理能力天生不足</p>
+    </div>
+    <div class="detail-text">
+      <h3>相關發現</h3>
+      <p><strong>Concern Tangling / Scattering</strong>（RepoLens 揭示）：<br>
+      • 一個功能分散在多個檔案（Scattering）<br>
+      • 一個檔案混雜多個功能（Tangling）<br>
+      這讓「哪個功能出了問題」變得極難判斷。</p>
+      <p><strong>Aggregation Deficit</strong>（RepoReason 揭示）：<br>
+      LLM 的主要認知瓶頸不是無法理解單一程式碼片段，而是無法整合寬度足夠的資訊來做出正確判斷。</p>
+      <h3>現有緩解方案</h3>
+      <table>
+        <thead><tr><th>方案</th><th>效果</th><th>限制</th></tr></thead>
+        <tbody>
+          <tr><td>RGFL 分層推理</td><td>Hit@1 85%</td><td>仍有 15% 失敗</td></tr>
+          <tr><td>RIG 程式碼圖譜</td><td>+12.2% 準確率</td><td>需要建圖時間</td></tr>
+          <tr><td>RepoLens 概念知識</td><td>+22% Hit@k</td><td>概念抽取品質依賴 LLM</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Page P: 難點 2 — 長上下文推理退化 -->
+<section class="slide">
+  <h2>🔴 難點 2：長上下文推理退化</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>問題描述</h3>
+      <p>即使 200K token 的上下文窗口，Agent 的推理品質在長對話中<strong>持續退化</strong>。CAT 研究明確指出這一現象。SWE-Pruner 的存在本身就說明：<strong>更多上下文 ≠ 更好結果</strong>。</p>
+      <h3>四大退化機制</h3>
+      <p>🔸 <strong>注意力稀釋效應</strong>：Transformer softmax attention 在 token 數增加時，每個 token 獲得的注意力權重下降。關鍵資訊被大量無關程式碼「淹沒」。</p>
+      <p>🔸 <strong>Lost in the Middle</strong>：LLM 傾向關注 prompt 開頭和結尾的內容，中間位置的關鍵片段被系統性忽略。</p>
+      <p>🔸 <strong>語義漂移</strong>：Agent 在探索、規劃、執行間切換時，累積的上下文逐漸偏離原始任務目標。</p>
+      <p>🔸 <strong>O(n²) 複雜度</strong>：Attention mechanism 的計算成本隨 token 數平方增長，限制了窗口的根本擴展。</p>
+    </div>
+    <div class="detail-text">
+      <h3>現有緩解方案</h3>
+      <div class="card green">
+        <h3>✅ SWE-Pruner 壓縮</h3>
+        <p>0.6B 神經略讀器移除 23-54% 無關 token。核心思路：與其讓 LLM 自己「忽略」噪音，不如在輸入端就過濾掉。</p>
+      </div>
+      <div class="card blue">
+        <h3>✅ CAT 動態管理</h3>
+        <p>將上下文維護提升為 Agent 可呼叫的工具。Agent 可以主動「獲取」和「釋放」上下文片段，避免一次性載入。SWE-bench Verified 達 57.6%。</p>
+      </div>
+      <div class="card orange">
+        <h3>✅ CodeMEM AST 導向</h3>
+        <p>用 AST 結構引導記憶管理，指令遵循率 +12.2%，減少 2-3 輪互動。結構化記憶比扁平文字更抗退化。</p>
+      </div>
+      <p><strong>根本解法仍待突破</strong>：以上都是「緩解」而非「解決」。突破性進展可能需要注意力機制的根本性改進（如 sparse attention、state-space models）。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page Q: 難點 3 — Monorepo 擴展性 -->
+<section class="slide">
+  <h2>🔴 難點 3：Monorepo 規模擴展</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>問題描述</h3>
+      <p>Google、Meta 等公司的 monorepo 包含<strong>數十億行程式碼</strong>。現有 LLM 方法大多在中小型開源 repo 上評估，擴展到 monorepo 規模面臨根本性挑戰。</p>
+      <h3>擴展障礙</h3>
+      <p>📌 <strong>索引和搜索成本超線性增長</strong>：程式碼量翻倍，搜索成本可能增長 4-8 倍（因為交叉依賴指數增加）。</p>
+      <p>📌 <strong>Build system 極度複雜</strong>：Monorepo 的 Bazel/Buck 構建系統有成千上萬個目標和依賴規則。</p>
+      <p>📌 <strong>測試執行資源巨大</strong>：Google 每天執行數十億次測試。全量測試不可行，需要精確的測試選擇策略。</p>
+      <p>📌 <strong>版本和分支管理</strong>：數千開發者同時提交，程式碼狀態快速變化。</p>
+    </div>
+    <div class="detail-text">
+      <h3>目前唯一的工業驗證</h3>
+      <div class="card blue">
+        <h3>🏢 Google Bug Reproduction</h3>
+        <p>Google 是唯一在工業 monorepo 上評估 LLM agents 的論文。他們用 LLM 自動生成 bug reproduction tests，驗證了在真實工業規模上的可行性。但這僅限於 bug reproduction，不包括完整的修復流程。</p>
+      </div>
+      <h3>可能的擴展策略</h3>
+      <p>🔹 <strong>RIG 程式碼圖譜</strong>：用 build system 解析建立確定性圖譜，避免全量搜索。多語言 repo 效果最佳（+17.7% 準確率，-69.5% 時間）。</p>
+      <p>🔹 <strong>FuseSearch 加速</strong>：多路並行搜索減少 67.7% 輪次、加速 93.6%。在大型 repo 中效果更顯著。</p>
+      <p>🔹 <strong>分層索引</strong>：Module → Package → File → Function 多級索引，逐層縮小搜索空間。</p>
+      <div class="warning-box">
+        ⚠️ 目前沒有任何公開方法在數十億行級 monorepo 上做到完整的自動化修復。這仍是開放問題。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page R: 難點 4 — 補丁安全性 -->
+<section class="slide">
+  <h2>🔴 難點 4：補丁安全性</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>兩層安全風險</h3>
+      <p><strong>風險 A：自動生成補丁引入新漏洞</strong><br>
+      LLM 生成的程式碼可能包含 injection、buffer overflow、race condition 等安全漏洞。VulnRepairEval 以 exploit-based 方式嚴格評估：</p>
+      <div class="card red">
+        <h3>🚨 最佳模型僅修復 21.7%（5/23）</h3>
+        <p>用 PoC exploit 驗證而非僅靠測試套件。增強提示和多代理方法改進有限——真實安全修復能力遠低於表面數字。</p>
+      </div>
+      <p><strong>風險 B：APR 系統被對抗性攻擊</strong><br>
+      SWExploit 揭示 APR 系統可被操縱：</p>
+      <div class="card red">
+        <h3>🚨 對抗攻擊成功率：0.91</h3>
+        <p>90% 的對抗性 bug 報告可觸發攻擊者期望的含漏洞補丁。最佳前置過濾器僅擋 47%。</p>
+      </div>
+    </div>
+    <div class="detail-text">
+      <h3>根本原因</h3>
+      <p>• LLM 不理解 security invariants<br>
+      • 訓練資料中安全/不安全模式混合<br>
+      • Security properties 的自動驗證是 undecidable<br>
+      • Exploit-based 評估揭示真實能力遠低於測試評估</p>
+      <h3>新興緩解方案</h3>
+      <table>
+        <thead><tr><th>方案</th><th>效果</th></tr></thead>
+        <tbody>
+          <tr><td>SAST 後置檢查（騰訊）</td><td>誤報降 94-98%</td></tr>
+          <tr><td>RvB 紅藍對抗</td><td>防禦成功率 90%，誤報 ~0%</td></tr>
+          <tr><td>CodeQL+KLEE 多工具</td><td>安全漏洞降 96%</td></tr>
+          <tr><td>SAST-Genius</td><td>Semgrep 誤報降 91%</td></tr>
+        </tbody>
+      </table>
+      <div class="card green">
+        <h3>💡 建議：多層防禦</h3>
+        <p>SAST 掃描 → LLM 誤報過濾 → 紅藍對抗測試 → 人工最終審查。不能依賴任何單一層。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page S: 難點 5 — 評估可靠性 -->
+<section class="slide">
+  <h2>🟡 難點 5：評估可靠性（SWE-Bench+ 問題）</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>問題描述</h3>
+      <p>SWE-bench 是目前最廣泛使用的倉庫級 Bug 修復基準。但 SWE-Bench+ 的審計揭示了嚴重的品質問題，讓業界數字的可信度大打折扣。</p>
+      <h3>三大品質問題</h3>
+      <p>🔸 <strong>Solution Leakage（32.67%）</strong>：Issue 描述中已包含修復方案。LLM 只需「提取」而非「解題」。</p>
+      <p>🔸 <strong>Weak Test Cases（31.08%）</strong>：測試太寬鬆，錯誤補丁也能通過。「通過測試」≠「正確修復」。</p>
+      <p>🔸 <strong>Knowledge Cutoff 重疊（94%+）</strong>：94% 以上的 issues 在 LLM 知識截斷日期之前。模型可能從訓練資料直接「記住」答案。</p>
+    </div>
+    <div class="detail-text">
+      <h3>過濾前後的數字對比</h3>
+      <div style="display:flex;flex-direction:column;gap:10px;margin:15px 0;">
+        <div><strong>原始宣稱解決率</strong>
+          <div style="background:#3b82f6;height:28px;width:50%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#fff;font-weight:bold;">12.47%</div></div>
+        <div><strong>SWE-Bench+ 真實率</strong>
+          <div style="background:#ef4444;height:28px;width:16%;border-radius:4px;display:flex;align-items:center;padding-left:8px;color:#fff;font-weight:bold;">3.97%</div></div>
+      </div>
+      <div class="warning-box">
+        ⚠️ 業界宣稱的表現被高估超過 <strong>3 倍</strong>。所有未在 SWE-Bench+ 上驗證的排行榜數字都應謹慎對待。
+      </div>
+      <h3>改進方向</h3>
+      <p>• <strong>SWE-Bench++</strong>：擴展至 11 語言、3,971 repos，可擴展生成<br>
+      • <strong>Breakpoint</strong>：用對抗性損壞測試真實推理能力<br>
+      • <strong>FAUN-Eval</strong>：細粒度子任務評估，避免單一分數掩蓋弱點</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page T: 難點 6 — APR 對抗攻擊 -->
+<section class="slide">
+  <h2>🔴 難點 6：APR 對抗攻擊（SWExploit）</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>SWExploit 攻擊框架</h3>
+      <p>Red Teaming APR 研究構建了 <strong>SWExploit</strong>——一個專門針對自動化程式修復（APR）系統的對抗性攻擊框架。</p>
+      <h3>攻擊方式</h3>
+      <p>攻擊者精心構造 bug report（issue description），看似正常的問題回報，實際上引導 APR 系統生成包含漏洞的補丁。</p>
+      <p>1️⃣ <strong>分析目標 APR</strong>：了解系統的定位和修復邏輯<br>
+      2️⃣ <strong>構造對抗性 Issue</strong>：在描述中嵌入引導資訊<br>
+      3️⃣ <strong>觸發含漏洞補丁</strong>：APR 系統「自願」生成攻擊者想要的漏洞程式碼<br>
+      4️⃣ <strong>繞過驗證</strong>：補丁能通過測試套件，但包含安全漏洞</p>
+      <div class="card red">
+        <h3>🚨 攻擊成功率：0.91</h3>
+        <p>基線攻擊成功率 <0.20，SWExploit 提升到 <strong>0.91</strong>。最佳前置過濾器僅能攔截 47%。</p>
+      </div>
+    </div>
+    <div class="detail-text">
+      <h3>為什麼這很危險？</h3>
+      <p>隨著 APR 系統在企業中部署，供應鏈攻擊的新載體出現了：<br>
+      • 攻擊者不需要直接入侵程式碼庫<br>
+      • 只需要提交「看似正常」的 bug report<br>
+      • APR 系統會自動生成並合併含漏洞的補丁<br>
+      • 通過了所有測試——看起來完全正常</p>
+      <h3>防禦方案</h3>
+      <div class="card green">
+        <h3>🛡️ RvB 紅藍對抗框架</h3>
+        <p>免訓練的序列博弈框架。紅隊 Agent 嘗試找到代碼弱點，藍隊 Agent 負責加固。防禦成功率 <strong>90%</strong>，誤報約 <strong>0%</strong>。</p>
+      </div>
+      <div class="card blue">
+        <h3>🔒 多層防禦建議</h3>
+        <p>• Issue 來源驗證（可信度評分）<br>
+        • SAST 後置掃描所有自動生成的補丁<br>
+        • 紅藍對抗測試高風險修改<br>
+        • 安全敏感代碼必須人工審查</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page U: Phase 1 理解層詳解 -->
+<section class="slide">
+  <h2>🏗️ Phase 1 詳解：理解層（Month 1-3）</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>目標</h3>
+      <p>建立可運行的 MVP，部署 Agentless Pipeline，處理簡單到中等難度的 Bug。預期解決率 ~32%，成本 $0.70/issue。</p>
+      <h3>RIG 程式碼圖譜方案</h3>
+      <p><strong>RIG（Repository Intelligence Graph）</strong>是理解層的核心基礎設施：</p>
+      <p>1️⃣ <strong>Build System 解析</strong>：從 Makefile/CMake/Gradle 等建構系統中提取模組依賴<br>
+      2️⃣ <strong>AST 多粒度索引</strong>：Tree-sitter 解析程式碼，建立 File→Class→Function→Line 索引<br>
+      3️⃣ <strong>LLM-Friendly JSON View</strong>：將圖譜轉換為 LLM 易於消化的 JSON 格式<br>
+      4️⃣ <strong>多語言支援</strong>：同一圖譜框架支援多種程式語言</p>
+      <div class="card blue">
+        <h3>📊 RIG 效果</h3>
+        <p>準確率 +12.2%，完成時間 -53.9%。多語言 repo 效果更佳：+17.7% 準確率，-69.5% 時間。</p>
+      </div>
+    </div>
+    <div class="detail-text">
+      <h3>技術選型理由</h3>
+      <table>
+        <thead><tr><th>選擇</th><th>方案</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td>主力 LLM</td><td>Claude Sonnet / GPT-4o</td><td>SWE-bench 表現最佳</td></tr>
+          <tr><td>AST 解析</td><td>Tree-sitter</td><td>多語言、增量解析</td></tr>
+          <tr><td>圖資料庫</td><td>Neo4j / NetworkX</td><td>支援結構化+語意搜索</td></tr>
+          <tr><td>沙盒</td><td>Docker per task</td><td>隔離性、可重現</td></tr>
+          <tr><td>檢索</td><td>BM25 + 向量混合</td><td>keyword + semantic 互補</td></tr>
+        </tbody>
+      </table>
+      <h3>Phase 1 交付物</h3>
+      <p>✅ Agentless 三階段 Pipeline 上線<br>
+      ✅ 基礎程式碼索引（AST + BM25 + 向量檢索）<br>
+      ✅ Docker 沙盒 + 自動測試執行<br>
+      ✅ PR 生成與 CI/CD 整合<br>
+      ✅ 失敗案例收集系統（驅動後續優化）</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page V: Phase 2 定位層詳解 -->
+<section class="slide">
+  <h2>🔍 Phase 2 詳解：定位層（Month 3-6）</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>RGFL 分層推理定位</h3>
+      <p>RGFL 的核心思路：讓 LLM 先生成結構化 Bug 解釋，再按層級逐步縮小定位範圍。</p>
+      <svg viewBox="0 0 300 200" style="width:100%;max-width:300px;">
+        <rect x="50" y="5" width="200" height="35" rx="6" fill="#2563eb"/><text x="150" y="28" text-anchor="middle" fill="#fff" font-size="11">Bug 解釋生成</text>
+        <rect x="70" y="55" width="160" height="30" rx="6" fill="#3b82f6"/><text x="150" y="75" text-anchor="middle" fill="#fff" font-size="11">Repo → Top-K Files</text>
+        <rect x="85" y="100" width="130" height="30" rx="6" fill="#6366f1"/><text x="150" y="120" text-anchor="middle" fill="#fff" font-size="11">File → Functions</text>
+        <rect x="100" y="145" width="100" height="30" rx="6" fill="#8b5cf6"/><text x="150" y="165" text-anchor="middle" fill="#fff" font-size="11">Function → Lines</text>
+        <line x1="150" y1="40" x2="150" y2="55" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="150" y1="85" x2="150" y2="100" stroke="#94a3b8" stroke-width="2"/>
+        <line x1="150" y1="130" x2="150" y2="145" stroke="#94a3b8" stroke-width="2"/>
+      </svg>
+      <p><strong>效果</strong>：檔案級 Hit@1 從 71.4% → <strong>85%</strong>（+13.6pp），帶來 <strong>12.8%</strong> 端到端修復提升。</p>
+    </div>
+    <div class="detail-text">
+      <h3>FuseSearch 並行加速</h3>
+      <p>FuseSearch 用多路並行搜索策略取代序列搜索：</p>
+      <p>🔹 <strong>Grep 路</strong>：關鍵字精確匹配<br>
+      🔹 <strong>語意路</strong>：向量相似度搜索<br>
+      🔹 <strong>AST 結構路</strong>：程式碼結構匹配</p>
+      <p>RL 策略動態決定每路的搜索深度和何時停止。</p>
+      <div class="card green">
+        <h3>📊 FuseSearch 效果</h3>
+        <p>檔案級 F1 <strong>84.7%</strong>（SOTA）。搜索加速 <strong>93.6%</strong>，減少 <strong>67.7%</strong> 搜索輪次。Fine-tune 4B 參數模型即可達到最佳效果。</p>
+      </div>
+      <h3>RGFL + FuseSearch 組合</h3>
+      <p>RGFL 提供定位精度，FuseSearch 提供搜索速度。兩者組合：<strong>快速且精確</strong>的故障定位。再搭配 SWE-Pruner 壓縮上下文——定位層的完整技術棧。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page W: Phase 3 修復層詳解 -->
+<section class="slide">
+  <h2>🤖 Phase 3 詳解：修復層（Month 6-9）</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>Agentless Fast Path</h3>
+      <p>80% 的簡單 Bug 走 Fast Path：</p>
+      <p>1️⃣ 定位結果（Phase 2 提供）<br>
+      2️⃣ LLM 生成 5-10 個候選補丁<br>
+      3️⃣ Docker 沙盒測試驗證<br>
+      4️⃣ 最佳補丁自動提交 PR</p>
+      <p>成本 $0.70/issue，解決率 ~32%。</p>
+      <h3>Agent 升級路徑</h3>
+      <p>20% 的複雜 Bug 升級至 Multi-Agent：</p>
+      <p>🧠 <strong>Planner Agent</strong>：分析問題，制定修復策略<br>
+      🔍 <strong>Navigator Agent</strong>：探索程式碼庫，收集上下文<br>
+      ✏️ <strong>Editor Agent</strong>：生成跨檔案修改<br>
+      ⚙️ <strong>Executor Agent</strong>：執行測試，驗證結果</p>
+    </div>
+    <div class="detail-text">
+      <h3>精煉與增強</h3>
+      <div class="card blue">
+        <h3>🔄 REFINE 補丁精煉</h3>
+        <p>識別「近似正確」的候選補丁，用上下文感知修正 prompt 迭代精煉。SWE-bench Lite 上帶來 <strong>+14.67%</strong> 提升。</p>
+      </div>
+      <div class="card green">
+        <h3>🧠 MemGovern 經驗記憶</h3>
+        <p>135K 經驗卡結構化存儲歷史修復經驗。遇到相似問題直接引用，插件式提升 <strong>+4.65%</strong>。</p>
+      </div>
+      <div class="card orange">
+        <h3>🧪 SWT-Bench 測試生成</h3>
+        <p>從 Issue 描述自動生成針對性測試案例，讓驗證精確度 <strong>翻倍</strong>。解決「通過測試 ≠ 正確修復」的問題。</p>
+      </div>
+      <h3>預期效果</h3>
+      <p>整合 REFINE + MemGovern + AlignCoder（EM +18.1%），修復解決率預計從 32% 提升至 <strong>50-55%</strong>。複雜場景由 Agent 子系統處理。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page X: Phase 4 安全整合層詳解 -->
+<section class="slide">
+  <h2>🔐 Phase 4 詳解：安全整合層（Month 9-12）</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>SAST 整合驗證</h3>
+      <p>所有自動生成的補丁必須通過靜態分析安全掃描：</p>
+      <p>1️⃣ <strong>CodeQL 掃描</strong>：檢測 CWE 類漏洞<br>
+      2️⃣ <strong>Semgrep 規則</strong>：快速模式匹配安全問題<br>
+      3️⃣ <strong>LLM 誤報過濾</strong>（騰訊方法）：降 94-98% 誤報<br>
+      4️⃣ <strong>IRIS 增強</strong>：LLM 推斷 taint 規格，檢測更多漏洞</p>
+      <h3>KNighter 自動合成 Checker</h3>
+      <p>從專案自身的 commit 歷史中學習 bug 模式，自動合成專案特定的靜態分析規則。持續進化的安全防線。</p>
+      <h3>CI/CD 自動修復整合</h3>
+      <p>• GradleFixer 思路的 Tool Bridging<br>
+      • IaCGen 思路的迭代反饋驗證<br>
+      • 構建失敗自動修復率 >70%</p>
+    </div>
+    <div class="detail-text">
+      <h3>紅藍對抗測試</h3>
+      <div class="card red">
+        <h3>🔴 紅隊（攻擊）</h3>
+        <p>SWExploit 風格的對抗性測試：自動生成惡意 Issue，嘗試讓 APR 系統生成含漏洞的補丁。測試系統的對抗性魯棒性。</p>
+      </div>
+      <div class="card green">
+        <h3>🟢 藍隊（防禦）</h3>
+        <p>RvB 框架風格的防禦加固：檢測可疑 Issue → SAST 深度掃描 → 多工具交叉驗證（CodeQL + KLEE）。防禦成功率目標 >90%。</p>
+      </div>
+      <h3>安全里程碑</h3>
+      <table>
+        <thead><tr><th>時間</th><th>里程碑</th><th>目標</th></tr></thead>
+        <tbody>
+          <tr><td>M9</td><td>漏洞自動修補 MVP</td><td>>50% 已知 CVE 類型</td></tr>
+          <tr><td>M10</td><td>LLM Checker 合成</td><td>專案特定規則</td></tr>
+          <tr><td>M11</td><td>CI/CD 修復整合</td><td>>70% 構建修復</td></tr>
+          <tr><td>M12</td><td>紅藍對抗測試</td><td>通過對抗性測試</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Page Y: KPI 仪表板 -->
+<section class="slide">
+  <h2>📊 KPI 儀表板：預期效果</h2>
+  <div class="detail-text">
+    <h3>核心指標進度條</h3>
+    <div style="display:flex;flex-direction:column;gap:16px;margin:20px 0;">
+      <div>
+        <div style="display:flex;justify-content:space-between;"><strong>🐛 Bug 修復解決率</strong><span>目標：60%</span></div>
+        <div style="background:#e2e8f0;height:30px;border-radius:6px;overflow:hidden;position:relative;">
+          <div style="background:#f59e0b;height:100%;width:32%;"></div>
+          <div style="background:#3b82f6;height:100%;width:50%;position:absolute;top:0;left:0;opacity:0.5;"></div>
+          <div style="background:#22c55e;height:100%;width:60%;position:absolute;top:0;left:0;opacity:0.3;"></div>
+          <span style="position:absolute;left:10px;top:5px;color:#000;font-size:12px;">Phase1: 32% → Phase3: 50% → Phase4: 60%</span>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;"><strong>🎯 故障定位精度（Hit@1）</strong><span>目標：85%</span></div>
+        <div style="background:#e2e8f0;height:30px;border-radius:6px;overflow:hidden;">
+          <div style="background:#2563eb;height:100%;width:85%;display:flex;align-items:center;padding-left:10px;color:#fff;font-size:13px;">85% (RGFL)</div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;"><strong>💵 每 Issue 平均成本</strong><span>目標：<$3</span></div>
+        <div style="background:#e2e8f0;height:30px;border-radius:6px;overflow:hidden;">
+          <div style="background:#22c55e;height:100%;width:30%;display:flex;align-items:center;padding-left:10px;color:#fff;font-size:13px;">~$2-3（混合架構）</div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;"><strong>✂️ Token 節省</strong><span>目標：30%+</span></div>
+        <div style="background:#e2e8f0;height:30px;border-radius:6px;overflow:hidden;">
+          <div style="background:#8b5cf6;height:100%;width:54%;display:flex;align-items:center;padding-left:10px;color:#fff;font-size:13px;">23-54% (SWE-Pruner)</div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;"><strong>🛡️ SAST 誤報降低</strong><span>目標：90%+</span></div>
+        <div style="background:#e2e8f0;height:30px;border-radius:6px;overflow:hidden;">
+          <div style="background:#ef4444;height:100%;width:98%;display:flex;align-items:center;padding-left:10px;color:#fff;font-size:13px;">94-98%（騰訊實證）</div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;"><strong>🔨 CI/CD 構建修復率</strong><span>目標：75%+</span></div>
+        <div style="background:#e2e8f0;height:30px;border-radius:6px;overflow:hidden;">
+          <div style="background:#f59e0b;height:100%;width:81.4%;display:flex;align-items:center;padding-left:10px;color:#fff;font-size:13px;">81.4% (GradleFixer)</div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;"><strong>📝 Code Review 缺陷覆蓋率提升</strong><span>目標：+200%</span></div>
+        <div style="background:#e2e8f0;height:30px;border-radius:6px;overflow:hidden;">
+          <div style="background:#2563eb;height:100%;width:95%;display:flex;align-items:center;padding-left:10px;color:#fff;font-size:13px;">+285% (AACR-Bench)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page Z: 風險矩陣 -->
+<section class="slide">
+  <h2>⚠️ 風險矩陣與緩解方案</h2>
+  <div class="two-col">
+    <div class="detail-text">
+      <h3>高風險 🔴</h3>
+      <table>
+        <thead><tr><th>風險</th><th>影響</th><th>緩解方案</th></tr></thead>
+        <tbody>
+          <tr><td>補丁引入安全漏洞</td><td>生產環境安全事故</td><td>SAST 後置掃描 + 紅藍對抗 + 人工審查高風險修改</td></tr>
+          <tr><td>APR 對抗攻擊</td><td>供應鏈安全風險</td><td>Issue 來源驗證 + 多層防禦（RvB 框架）</td></tr>
+          <tr><td>Hallucination 引入錯誤</td><td>引入新 Bug</td><td>SemAgent 語義約束 + 交叉驗證 + 回歸測試</td></tr>
+          <tr><td>Monorepo 擴展失敗</td><td>無法在大型專案使用</td><td>分層索引 + RIG 圖譜 + FuseSearch 加速</td></tr>
+        </tbody>
+      </table>
+      <h3>中風險 🟡</h3>
+      <table>
+        <thead><tr><th>風險</th><th>影響</th><th>緩解方案</th></tr></thead>
+        <tbody>
+          <tr><td>SWE-bench 指標不可靠</td><td>投資方向偏差</td><td>採用 SWE-Bench+ / Breakpoint 嚴格評估</td></tr>
+          <tr><td>LLM API 成本超預期</td><td>ROI 不達標</td><td>SWE-Pruner 節省 token + 開源模型備選</td></tr>
+          <tr><td>多語言支援不足</td><td>覆蓋範圍受限</td><td>Phase 4 漸進擴展，優先 JS/TS、Java</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="detail-text">
+      <h3>低風險 🟢</h3>
+      <table>
+        <thead><tr><th>風險</th><th>影響</th><th>緩解方案</th></tr></thead>
+        <tbody>
+          <tr><td>開源模型落後閉源</td><td>依賴 API 廠商</td><td>Kimi-Dev/daVinci-Dev 路線 fine-tune</td></tr>
+          <tr><td>團隊技能缺口</td><td>開發進度延遲</td><td>階段式部署，先 Agentless 降低門檻</td></tr>
+          <tr><td>工具鏈整合複雜</td><td>整合成本高</td><td>Docker 沙盒隔離 + 標準化 API</td></tr>
+        </tbody>
+      </table>
+      <div class="card blue">
+        <h3>💡 風險管理原則</h3>
+        <p>• <strong>先跑起來，再跑得好</strong>：Phase 1 的 Agentless MVP 風險最低<br>
+        • <strong>安全不可後補</strong>：Phase 4 SAST 整合是必需的<br>
+        • <strong>數據驅動</strong>：每階段失敗案例分析驅動下一階段<br>
+        • <strong>漸進式投資</strong>：避免一次性大規模投入</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Page AA: 5 個核心 Takeaway -->
+<section class="slide">
+  <h2>🎯 五個核心 Takeaway</h2>
+  <div class="detail-text">
+    <div class="card blue" style="margin-bottom:16px;">
+      <h3>1️⃣ 定位是瓶頸，投資定位 ROI 最高</h3>
+      <p>RGFL 帶來 12.8% 端到端修復提升。定位對了，修復往往簡單。優先投資 RGFL + FuseSearch，檔案級 Hit@1 可達 85%。</p>
+    </div>
+    <div class="card green" style="margin-bottom:16px;">
+      <h3>2️⃣ Agentless + Agent 混合是最務實的架構</h3>
+      <p>80% 簡單問題走 Agentless（$0.70），20% 複雜問題升級 Agent。Kimi-Dev（60.4%）證明兩者技術可互通、互補。不是二選一。</p>
+    </div>
+    <div class="card orange" style="margin-bottom:16px;">
+      <h3>3️⃣ 基準數字要打折——SWE-Bench+ 真實率僅 3.97%</h3>
+      <p>32.67% solution leakage + 31.08% weak tests。所有宣稱的高分都需要在過濾後的基準上重新驗證。保持懷疑態度。</p>
+    </div>
+    <div class="card red" style="margin-bottom:16px;">
+      <h3>4️⃣ 安全是紅線——APR 對抗攻擊成功率 0.91</h3>
+      <p>自動生成的補丁可能被利用為攻擊載體。SAST 整合、紅藍對抗、人工審查缺一不可。安全不可後補。</p>
+    </div>
+    <div class="card blue" style="margin-bottom:16px;">
+      <h3>5️⃣ LLM + 靜態分析整合是最快落地的方向</h3>
+      <p>騰訊實證：誤報降 94-98%，成本 $0.001-0.12/告警。KNighter 在 Linux kernel 發現 30 個 CVE。工業可行性已被驗證。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Page BB: Q&A / 感謝頁 -->
+<section class="slide">
+  <h2>🙏 感謝聆聽 & Q&A</h2>
+  <div class="detail-text" style="text-align:center;">
+    <div style="font-size:48px;margin:30px 0;">🤖 📝 🔍 🛡️ 🚀</div>
+    <h3 style="font-size:24px;margin-bottom:20px;">大型程式碼倉庫中 LLM 自動化代碼修改技術</h3>
+    <p style="font-size:18px;color:#64748b;">基於 86 篇 ArXiv 論文（2023–2026）之完整研究報告</p>
+    <div style="margin:30px auto;max-width:500px;text-align:left;">
+      <h3>📚 關鍵參考</h3>
+      <p>• <strong>86 篇</strong>論文系統性分析<br>
+      • <strong>11 個</strong>技術類別覆蓋<br>
+      • <strong>4 個</strong>工業部署案例（Google、字節跳動、騰訊、Kodezi）<br>
+      • <strong>4 階段</strong> 12 個月實施路線圖</p>
+    </div>
+    <div style="margin:30px auto;max-width:500px;text-align:left;">
+      <h3>💡 核心建議</h3>
+      <p>🥇 立即部署 Agentless Pipeline MVP<br>
+      🥈 投資故障定位（RGFL + FuseSearch）<br>
+      🥉 建立程式碼知識圖譜基礎設施</p>
+    </div>
+    <div style="margin-top:40px;padding:20px;border:2px solid #e2e8f0;border-radius:12px;display:inline-block;">
+      <p style="font-size:20px;margin:0;">❓ <strong>Questions & Discussion</strong></p>
+    </div>
+  </div>
+</section>
+
+
+
+<script>
+let cur = 0;
+const ss = document.querySelectorAll('.slide');
+function go(n) { ss[cur].style.display='none'; cur=Math.max(0,Math.min(n,ss.length-1)); ss[cur].style.display='flex'; }
+document.addEventListener('keydown', e => {
+  if(e.key==='ArrowRight'||e.key===' ')go(cur+1);
+  if(e.key==='ArrowLeft')go(cur-1);
+});
+document.addEventListener('click', e => {
+  go(e.clientX > window.innerWidth/2 ? cur+1 : cur-1);
+});
+</script>
+</body>
+</html>

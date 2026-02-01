@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LLM 自動化代碼修改技術：完整研究報告</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
+<title>LLM 自動化代碼修改技術：圖解版研究報告</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
 <!-- marked.js for markdown rendering -->
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.1/marked.min.js"></script>
 <!-- highlight.js for code syntax highlighting -->
@@ -23,8 +23,8 @@
     --border: #d0d7de;
     --text: #1f2328;
     --text-muted: #636c76;
-    --accent: #0969da;
-    --accent-light: #ddf4ff;
+    --accent: #8250df;
+    --accent-light: #f3e8ff;
     --code-bg: #f6f8fa;
     --table-border: #d0d7de;
     --table-stripe: #f6f8fa;
@@ -44,11 +44,11 @@
   /* Header */
   .site-header {
     position: fixed;
-    top: 0;
+    top: 42px;
     left: 0;
     right: 0;
     height: var(--header-height);
-    background: linear-gradient(135deg, #0969da 0%, #1a7f37 100%);
+    background: linear-gradient(135deg, #8250df 0%, #0969da 100%);
     color: white;
     display: flex;
     align-items: center;
@@ -100,10 +100,10 @@
   /* Sidebar */
   .sidebar {
     position: fixed;
-    top: var(--header-height);
+    top: calc(var(--header-height) + 42px);
     left: 0;
     width: var(--sidebar-width);
-    height: calc(100vh - var(--header-height));
+    height: calc(100vh - var(--header-height) - 42px);
     background: var(--bg-sidebar);
     border-right: 1px solid var(--border);
     overflow-y: auto;
@@ -162,7 +162,7 @@
   /* Main content */
   .main-content {
     margin-left: var(--sidebar-width);
-    margin-top: var(--header-height);
+    margin-top: calc(var(--header-height) + 42px);
     padding: 2.5rem 3rem 4rem;
     max-width: 960px;
   }
@@ -259,6 +259,16 @@
     font-weight: 600;
   }
 
+  /* Images */
+  .markdown-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    margin: 1rem 0;
+    display: block;
+  }
+
   /* Tables */
   .markdown-body table {
     border-collapse: collapse;
@@ -334,6 +344,46 @@
     z-index: 899;
   }
 
+  /* Top navigation bar */
+  .top-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 42px;
+    background: #1a1a2e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    z-index: 1100;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    font-size: 0.88rem;
+  }
+
+  .top-nav a {
+    color: rgba(255,255,255,0.75);
+    text-decoration: none;
+    padding: 0 1.25rem;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    transition: all 0.15s;
+    border-bottom: 2px solid transparent;
+    font-weight: 500;
+  }
+
+  .top-nav a:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.08);
+  }
+
+  .top-nav a.active {
+    color: #fff;
+    border-bottom-color: #a371f7;
+    background: rgba(255,255,255,0.05);
+  }
+
   /* Responsive */
   @media (max-width: 1024px) {
     .sidebar {
@@ -386,66 +436,7 @@
     .markdown-body th, .markdown-body td {
       padding: 0.4rem 0.5rem;
     }
-  }
 
-  /* Top navigation bar */
-  .top-nav {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 42px;
-    background: #1a1a2e;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    z-index: 1100;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-    font-size: 0.88rem;
-  }
-
-  .top-nav a {
-    color: rgba(255,255,255,0.75);
-    text-decoration: none;
-    padding: 0 1.25rem;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    transition: all 0.15s;
-    border-bottom: 2px solid transparent;
-    font-weight: 500;
-  }
-
-  .top-nav a:hover {
-    color: #fff;
-    background: rgba(255,255,255,0.08);
-  }
-
-  .top-nav a.active {
-    color: #fff;
-    border-bottom-color: #58a6ff;
-    background: rgba(255,255,255,0.05);
-  }
-
-  .site-header {
-    top: 42px;
-  }
-
-  .sidebar {
-    top: calc(var(--header-height) + 42px);
-    height: calc(100vh - var(--header-height) - 42px);
-  }
-
-  .main-content {
-    margin-top: calc(var(--header-height) + 42px);
-  }
-
-  [id] {
-    scroll-margin-top: calc(var(--header-height) + 42px + 1rem);
-  }
-
-  @media (max-width: 640px) {
     .top-nav { font-size: 0.78rem; }
     .top-nav a { padding: 0 0.75rem; }
   }
@@ -456,15 +447,17 @@
     .main-content { margin: 0; padding: 1rem; max-width: 100%; }
   }
 
-  /* (scroll-margin moved above with nav offset) */
+  [id] {
+    scroll-margin-top: calc(var(--header-height) + 42px + 1rem);
+  }
 </style>
 </head>
 <body>
 
 <!-- Top Navigation -->
 <nav class="top-nav">
-  <a href="index.html" class="active">📄 文字版報告</a>
-  <a href="illustrated.html">🎨 圖解版報告</a>
+  <a href="index.html">📄 文字版報告</a>
+  <a href="illustrated.html" class="active">🎨 圖解版報告</a>
   <a href="slides-merged.html">📊 投影片</a>
 </nav>
 
@@ -472,11 +465,11 @@
 <header class="site-header">
   <div class="header-content">
     <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle navigation">☰</button>
-    <div class="header-title">📄 LLM 自動化代碼修改技術：完整研究報告</div>
+    <div class="header-title">🎨 LLM 自動化代碼修改技術：圖解版研究報告</div>
     <div class="header-meta">
       <span class="header-badge">📚 86 篇論文</span>
       <span class="header-badge">📅 2026-02-01</span>
-      <span class="header-badge">🗂️ ArXiv 2023–2026</span>
+      <span class="header-badge">🖼️ 圖解版</span>
     </div>
   </div>
 </header>
@@ -497,22 +490,11 @@
 <!-- Back to top -->
 <button class="back-to-top" id="backToTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Back to top">↑</button>
 
-<!-- Markdown source (embedded) -->
-<script id="markdown-source" type="text/markdown">
-MARKDOWN_PLACEHOLDER
-</script>
-
 <script>
 (async function() {
-  // Load markdown - try embedded first, then fetch
-  let md;
-  const embedded = document.getElementById('markdown-source');
-  if (embedded && embedded.textContent.trim() !== 'MARKDOWN_PLACEHOLDER') {
-    md = embedded.textContent;
-  } else {
-    const res = await fetch('report.md');
-    md = await res.text();
-  }
+  // Fetch the illustrated report markdown
+  const res = await fetch('ILLUSTRATED-REPORT.md');
+  let md = await res.text();
 
   // Configure marked
   marked.setOptions({
