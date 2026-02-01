@@ -64,7 +64,11 @@
 
 根據論文研究的兩大流派——**Agentless 工作流**與 **Agentic 多代理系統**——以及 Kimi-Dev 所揭示的「兩者可互補」之洞見，建議採用分層混合架構：
 
+**📐 技術架構圖：**
 ![分層混合架構圖](images/01-layered-hybrid-architecture.png)
+
+**🎨 AI 視覺化：**
+![分層混合架構圖 AI 版](images-ai/01-ai-layered-architecture.png)
 
 > **圖 1：分層混合架構（Layered Hybrid Architecture）**
 > 系統分為五層：最上層的 **Orchestrator** 負責任務分發與策略選擇；中間層分為三條路徑——**Fast Path**（Agentless Pipeline）處理 80% 簡單問題（$0.70/issue），**Agent Subsystem** 升級處理 20% 複雜跨檔案問題，**Validation Subsystem** 提供四層驗證；底層的 **Shared Infrastructure** 包含上下文管理（CAT+SWE-Pruner）、記憶庫（MemGovern 135K 經驗卡）、程式碼索引（語意+BM25）及知識圖譜（RIG/LogicLens），為所有路徑共享。
@@ -76,7 +80,11 @@
 
 ### 2.2 六階段處理流程
 
+**📐 技術架構圖：**
 ![六階段處理流程圖](images/02-six-stage-pipeline.png)
+
+**🎨 AI 視覺化：**
+![六階段處理流程圖 AI 版](images-ai/02-ai-six-stages.png)
 
 > **圖 2：六階段處理流程（Six-Stage Processing Pipeline）**
 > 完整修復流程從 **問題接收**（Issue 解析+難度分流）開始，經 **故障定位**（RGFL 分層推理，Hit@1 85%）、**上下文收集**（SWE-Pruner 壓縮 23-54% token）、**修復生成**（5-10 候選 + REFINE 精煉 +14.67%）、**驗證**（語法/測試/安全/語意四層），到 **部署回饋**（PR 生成 + MemGovern 經驗回存）。整個流程形成閉環，失敗案例的回饋持續改進系統。
@@ -163,7 +171,11 @@ Issue Description
 
 故障定位是整個 Pipeline 的**瓶頸**。在百萬行級倉庫中，需要從數千個檔案中精確找到關鍵的幾行程式碼。
 
+**📐 技術架構圖：**
 ![故障定位技術互補關係圖](images/03-fault-localization-techniques.png)
+
+**🎨 AI 視覺化：**
+![故障定位技術互補關係圖 AI 版](images-ai/03-ai-fault-localization.png)
 
 > **圖 3：故障定位技術互補關係**
 > 七種定位技術分為四大類：**通用型**（RGFL 分層推理 Hit@1 85%、FuseSearch 並行搜索加速 93.6%）、**結構感知**（RepoLens 概念圖 +22% Hit@k、InfCode-C++ AST 查詢適用強型別語言）、**查詢增強**（Reformulate-Retrieve 處理嘈雜 Bug 描述、NL-Summarization 橋接微服務）、**歷史分析**（Time Travel Git Bisect 80.6%）。箭頭顯示技術間的互補流：查詢增強為 RGFL 提供更精確的輸入，RepoLens 豐富 InfCode-C++ 的搜索圖，Time Travel 為 RGFL 縮小搜索範圍。
@@ -198,7 +210,11 @@ Issue Description
 
 大型倉庫的程式碼量遠超 LLM 上下文窗口。關鍵在於精確提取與任務最相關的上下文片段。
 
+**📐 技術架構圖：**
 ![上下文提取技術方案組合圖](images/04-context-extraction-combo.png)
+
+**🎨 AI 視覺化：**
+![上下文提取技術方案組合圖 AI 版](images-ai/04-ai-context-extraction.png)
 
 > **圖 4：上下文提取技術方案組合**
 > 六種技術形成處理流水線：**依賴分析**（RLCE 沿依賴圖擴展，修復提升最高 160%）→ **智慧檢索**（AlignCoder RL 訓練的檢索器 EM +18.1%、RIG 確定性圖譜 +12.2% 準確率）→ **智慧過濾**（RepoShapley 用 Shapley 值評估每個代碼段的邊際貢獻，移除有害上下文）→ **代碼內聯**（InlineCoder 雙向內聯上下游呼叫）→ **語義圖譜**（LogicLens AST+LLM 增強的多倉庫語義圖）。
@@ -232,7 +248,11 @@ Issue Description
 
 使系統能處理真正大型倉庫（百萬行以上）的關鍵技術。
 
+**📐 技術架構圖：**
 ![上下文提取 vs 上下文管理核心差異圖](images/05-extraction-vs-management.png)
+
+**🎨 AI 視覺化：**
+![上下文提取 vs 上下文管理核心差異圖 AI 版](images-ai/05-ai-extraction-vs-management.png)
 
 > **圖 5：Context Extraction vs Context Management 核心差異**
 > **上下文提取**（3.2 節）解決的是「找什麼」——從倉庫中找到相關代碼片段，包含 RLCE 依賴圖遍歷、AlignCoder RL 檢索、RIG 確定性圖譜等六種技術。**上下文管理**（3.3 節）解決的是「怎麼用」——在 LLM 推理過程中有效利用已找到的上下文，包含 CAT 按需載入/釋放（57.6% 解決率）、SWE-Pruner 神經壓縮（23-54% token 節省）、MemGovern 結構化經驗記憶（135K 經驗卡）。簡言之：提取 ≈ 圖書館搜索，管理 ≈ 閱讀策略。
@@ -258,7 +278,11 @@ Issue Description
 
 ### 3.4 Patch Generation（修復生成）
 
+**📐 技術架構圖：**
 ![Patch Generation 技術關係圖](images/06-patch-generation-map.png)
+
+**🎨 AI 視覺化：**
+![Patch Generation 技術關係圖 AI 版](images-ai/06-ai-patch-generation.png)
 
 > **圖 6：Patch Generation 八種技術關係圖**
 > 八種技術分四個象限：**Pipeline 方法**——Agentless 提供 32% 基線（$0.70/issue），REFINE 在其上迭代精煉至 51.67%（+14.67%）；**語義增強**——SemAgent 用形式化約束減少幻覺，HAFixAgent 挖掘 commit 歷史模式互補；**訓練創新**——Kimi-Dev 將 Agentless 訓練轉化為 Agent 技能先驗達 60.4% SOTA，daVinci-Dev 用 Agent 原生軌跡訓練達 58.5%，SWE-Synth 合成可驗證訓練資料解決數據稀缺；**推理增強**——MCTS-Refined-CoT 用蒙特卡洛樹搜索精煉思維鏈。箭頭顯示關鍵技術繼承關係。
@@ -316,7 +340,11 @@ Issue Description
 
 ### 3.6 Multi-file Coordination（多檔案協調）
 
+**📐 技術架構圖：**
 ![Multi-file Coordination 詳解圖](images/07-multifile-coordination.png)
+
+**🎨 AI 視覺化：**
+![Multi-file Coordination 詳解圖 AI 版](images-ai/07-ai-multifile-coordination.png)
 
 > **圖 7：多檔案協調三大方案詳解**
 > 跨檔案 Bug 的核心問題：症狀在 File A，根因在 File B，修復需要動 Files C/D/E。三種方案各有側重：**HyperAgent** 用四代理架構（Planner 分解任務→Navigator 探索結構→Editor 協調修改→Executor 測試驗證）覆蓋完整 SE 生命週期；**BOAD** 用多臂老虎機框架自動發現最佳子代理組合，36B 模型在 SWE-bench-Live 排名第二，超越 GPT-4 與 Claude；**InfCode-C++** 結合語意意圖檢索與確定性 AST 查詢，在 MultiSWE-bench-CPP 達 25.58%（+10.85pp），專攻 C/C++ 強型別語言。
@@ -343,7 +371,11 @@ Issue Description
 
 LLM 與傳統靜態分析工具（CodeQL、Semgrep、Infer 等）的整合，是近期最具工業落地潛力的方向之一。核心思路：用 LLM 增強靜態分析器的精確度、自動合成分析規則、大幅降低誤報。
 
+**📐 技術架構圖：**
 ![靜態分析 + LLM 強化圖](images/08-static-analysis-llm.png)
+
+**🎨 AI 視覺化：**
+![靜態分析 + LLM 強化圖 AI 版](images-ai/08-ai-static-analysis-llm.png)
 
 > **圖 8：靜態分析 + LLM 強化全景圖**
 > 傳統 SAST 工具（CodeQL/Semgrep/Infer）最大痛點是高誤報率。LLM 在四個環節強化 SAST：**規則合成**——KNighter 從歷史 bug 自動合成 checker，在 Linux kernel 發現 30 個 CVE、92 個新 bug；**檢測增強**——IRIS 用 LLM 推斷 taint 規格使 CodeQL 從 27→55/120 (+103%)，SAST-Genius 混合框架誤報從 225→20 (-91%)；**誤報降低**——騰訊工業實證 94-98% 誤報消除、每條僅 $0.001-0.12，BugLens 精確度提升 7 倍；**自動修復**——PredicateFix 謂詞橋接 RAG 正確修復 +27-69%，QLCoder CVE→CodeQL 查詢合成 53.4%（5.3×改進）。
@@ -467,28 +499,44 @@ LLM 在構建失敗修復、CI/CD 配置管理和基礎設施即代碼（IaC）�
 
 ### 4.1 Google — LLM Bug Reproduction
 
+**📐 技術架構圖：**
 ![Google Bug Reproduction 案例圖](images/09a-google-bug-repro.png)
+
+**🎨 AI 視覺化：**
+![Google Bug Reproduction 案例圖 AI 版](images-ai/09a-ai-google-bug-repro.png)
 
 > **圖 9a：Google 工業規模 Bug 重現系統**
 > Google 是唯一在**十億行級 monorepo** 上評估 LLM 自動化的企業。系統流程：LLM Agent 分析 Bug 報告 → 導航 monorepo 定位相關代碼 → 自動生成重現測試 → 驗證 Bug 是否被觸發。這是首個工業規模的自動化 Bug 重現系統，對 monorepo 規模的可擴展性提供了寶貴的實證數據。
 
 ### 4.2 字節跳動 — ContextCRBench
 
+**📐 技術架構圖：**
 ![字節跳動 ContextCRBench 案例圖](images/09b-bytedance-contextcr.png)
+
+**🎨 AI 視覺化：**
+![字節跳動 ContextCRBench 案例圖 AI 版](images-ai/09b-ai-bytedance-contextcr.png)
 
 > **圖 9b：字節跳動 ContextCRBench 程式碼審查系統**
 > 字節跳動在生產環境部署了上下文感知的 hunk 級程式碼審查系統，基於 67,910 條真實審查記錄。系統特點：細粒度 hunk 級評估（而非整個 PR）、跨檔案上下文整合。部署後**審查表現提升 61.98%**，是目前規模最大的工業級 AI 程式碼審查部署之一。
 
 ### 4.3 Kodezi Chronos
 
+**📐 技術架構圖：**
 ![Kodezi Chronos 案例圖](images/09c-kodezi-chronos.png)
+
+**🎨 AI 視覺化：**
+![Kodezi Chronos 案例圖 AI 版](images-ai/09c-ai-kodezi-chronos.png)
 
 > **圖 9c：Kodezi Chronos — 除錯優先語言模型**
 > Kodezi 採用**除錯優先（Debugging-First）**的獨特設計哲學，與一般 LLM 的「生成優先」理念截然不同。模型從底層就為 Bug 發現與修復優化，具備深度代碼理解、Bug 模式識別、自動修復建議和倉庫級上下文感知能力。這種專門化設計在倉庫級除錯場景中展現出優於通用 LLM 的表現。
 
 ### 4.4 騰訊 — LLM + SAST 誤報降低
 
+**📐 技術架構圖：**
 ![騰訊 LLM+SAST 誤報降低案例圖](images/09d-tencent-sast-fp.png)
+
+**🎨 AI 視覺化：**
+![騰訊 LLM+SAST 誤報降低案例圖 AI 版](images-ai/09d-ai-tencent-sast.png)
 
 > **圖 9d：騰訊工業規模 LLM + SAST 誤報消除系統**
 > 這是首個工業級 LLM + 靜態分析整合的全面實證研究。**問題**：傳統 SAST 工具產生的告警中 94-98% 是誤報，人工審查每條需 10-20 分鐘。**方案**：LLM 結合代碼上下文自動分析每條告警，判斷真陽性 vs 誤報。**結果**：誤報降低 94-98%，每條告警成本僅 $0.001-0.12，相比人工審查節省數個數量級的時間和成本。這為全行業的 SAST 工具整合提供了可複製的範本。
@@ -497,7 +545,11 @@ LLM 在構建失敗修復、CI/CD 配置管理和基礎設施即代碼（IaC）�
 
 ## 五、論文脈絡與技術演進
 
+**📐 技術架構圖：**
 ![86 篇論文技術演進關係圖](images/10-paper-evolution-map.png)
+
+**🎨 AI 視覺化：**
+![86 篇論文技術演進關係圖 AI 版](images-ai/10-ai-paper-evolution.png)
 
 > **圖 10：86 篇論文技術演進關係圖**
 > 以 2023 年 SWE-bench 為起點，技術沿六條主線演進：**定位**（紅色）——RGFL 分層推理 + FuseSearch 並行加速；**上下文**（綠色）——CAT 工具化 + SWE-Pruner 壓縮；**修復生成**（藍色）——Agentless 32% 基線 → REFINE 51.67% → Kimi-Dev 60.4% SOTA，daVinci-Dev 58.5% 和 BOAD 自動發現；**評估**（橙色）——SWE-Bench+ 揭示真實率 3.97%、SWE-Bench++ 擴展至 11 語言、Breakpoint 最難任務 0%；**安全**（紫色）——IRIS 啟發 KNighter 30 CVE、SAST-Genius -91% 誤報 → 騰訊 94-98%、PatchIsland 72.1% → RvB 90% 防禦；**CI/CD**（青色）——GradleFixer 81.4%、IaCGen 54-91%。技術從「能不能做到」向「做得多好」和「能否工業部署」快速演進。
