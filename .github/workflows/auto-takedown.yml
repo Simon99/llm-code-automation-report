@@ -18,11 +18,11 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     steps:
-      - name: Wait 3 hours
+      - name: Wait before takedown
         run: |
-          echo "⏳ Pages deployed at $(date -u). Waiting 3 hours..."
-          sleep 10800
-          echo "⏰ 3 hours elapsed at $(date -u). Taking down Pages."
+          echo "⏳ Pages deployed at $(date -u). Waiting 2 minutes (test mode)..."
+          sleep 120
+          echo "⏰ Time elapsed at $(date -u). Taking down Pages."
 
       - name: Checkout
         uses: actions/checkout@v4
