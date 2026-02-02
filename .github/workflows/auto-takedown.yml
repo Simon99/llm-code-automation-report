@@ -18,11 +18,11 @@ jobs:
     environment:
       name: github-pages
     steps:
-      - name: Wait before takedown
+      - name: Wait 3 hours before takedown
         run: |
-          echo "⏳ Pages deployed at $(date -u). Waiting 2 minutes (test mode)..."
-          sleep 120
-          echo "⏰ Time elapsed at $(date -u). Deploying takedown page."
+          echo "⏳ Pages deployed at $(date -u). Waiting 3 hours..."
+          sleep 10800
+          echo "⏰ 3 hours elapsed at $(date -u). Deploying takedown page."
 
       - name: Create takedown page
         run: |
